@@ -1,0 +1,11 @@
+# Local CPU environment for tests. torch/torchvision: latest CPU wheels.
+torch
+torchvision
+timm==1.0.30
+transformers==5.17.0
+scikit-learn
+pandas
+pyyaml
+pillow
+matplotlib
+pytest
