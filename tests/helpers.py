@@ -79,3 +79,17 @@ def run_script(script: str, *args: object, check: bool = True) -> subprocess.Com
     if check and res.returncode != 0:
         raise AssertionError(f"{script} exited with {res.returncode}\nSTDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}")
     return res
+
+
+TINY_CLIP_MODEL = "hf-internal-testing/tiny-random-CLIPModel"
+
+
+def clip_smoke_overrides(data_root: Path, work_dir: Path) -> list[str]:
+    """Milestone 1 smoke settings plus a tiny CLIP and tiny heads / suite."""
+    return smoke_overrides(data_root, work_dir) + [
+        f"clip.model_name={TINY_CLIP_MODEL}", "clip.batch_size=8", "clip.shard_size=16", "clip.fp16=false",
+        "clip.corruptions.blur=[2]", "clip.corruptions.noise=[0.1]", "clip.corruptions.word_drop=[0.5]",
+        "head.epochs=2", "head.batch_size=16", "head.hidden=16", "head.xattn_dim=16", "head.xattn_heads=2",
+        "clip_suite.masks=[none,strict]", "clip_suite.fusion_heads=[concat,gated,xattn]",
+        "clip_suite.missing_md=[0.3]", "clip_suite.frac_heads=[image,xattn]", "clip_suite.fracs=[0.5]",
+    ]
