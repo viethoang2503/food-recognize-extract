@@ -2575,7 +2575,6 @@ def plot_weight_curve(curves: dict[str, list[dict]]):
     ax.legend()
     fig.tight_layout()
     return fig
-```
 
 
 def plot_confusion(cm: np.ndarray, title: str = ""):
