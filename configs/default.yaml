@@ -68,3 +68,44 @@ tfidf:
 
 late_fusion:
   w_step: 0.05
+
+
+
+clip:
+  model_name: openai/clip-vit-base-patch16
+  tag: vitb16
+  batch_size: 256
+  n_tokens: 16             # image: 4x4 pooled patch grid; text: 16 contiguous chunks
+  fp16: true               # only used on CUDA
+  main_mask: strict        # text mask used by the missing/robustness/fraction ablations
+  prompt: "a photo of {}, a type of food"
+  shard_size: 2048
+  corruptions:
+    blur: [1, 2, 4]        # Gaussian blur radius (pixels)
+    noise: [0.05, 0.1, 0.2]  # Gaussian noise std on [0, 1] pixels
+    word_drop: [0.25, 0.5, 0.75]
+
+head:
+  name: concat             # image | text | concat | gated | xattn
+  hidden: 512
+  dropout: 0.3
+  modality_dropout: 0.1
+  default_modality_dropout: 0.1
+  train_frac: 1.0
+  epochs: 30
+  batch_size: 256
+  lr: 1.0e-3
+  weight_decay: 0.01
+  warmup_ratio: 0.05
+  label_smoothing: 0.1
+  patience: 3
+  xattn_dim: 256
+  xattn_heads: 4
+  xattn_layers: 1
+
+clip_suite:
+  masks: [none, exact, strict]
+  fusion_heads: [concat, gated, xattn]
+  missing_md: [0.0, 0.3]
+  frac_heads: [image, text, concat, xattn]
+  fracs: [0.1, 0.25, 0.5]
