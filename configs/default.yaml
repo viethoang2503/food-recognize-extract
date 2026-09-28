@@ -1,0 +1,70 @@
+seed: 42
+
+paths:
+  data_root: /content/data/upmc_food101    # extracted dataset on local disk
+  work_dir: /content/drive/MyDrive/foodmm  # manifest, runs, results (Google Drive)
+
+data:
+  val_ratio: 0.1
+  subset_classes: null     # e.g. 5 for a quick smoke run
+  max_per_class: null
+  max_chars: 5000
+  max_drop_ratio: 0.05
+  max_bad_images: 50
+  text_mask: none          # none | exact | strict
+  num_workers: 4
+
+image:
+  backbone: resnet50
+  pretrained: true
+  img_size: 224
+  drop_rate: 0.2
+
+text:
+  model_name: distilbert/distilbert-base-uncased
+  pretrained: true
+  max_len: 256
+  drop_rate: 0.1
+
+fusion:
+  hidden: 512
+  dropout: 0.3
+  modality_dropout: 0.1
+  image_init: image        # run name of the image-only run
+  text_init: null          # run name of the text-only run; null -> text_<text_mask>
+
+train:
+  image:
+    epochs: 10
+    batch_size: 64
+    lr_backbone: 1.0e-4
+    lr_head: 1.0e-3
+    weight_decay: 0.05
+  text:
+    epochs: 4
+    batch_size: 32
+    lr_backbone: 3.0e-5
+    lr_head: 1.0e-3
+    weight_decay: 0.01
+  multimodal:
+    epochs: 4
+    batch_size: 32
+    lr_image: 3.0e-5
+    lr_text: 2.0e-5
+    lr_head: 1.0e-3
+    weight_decay: 0.01
+  warmup_ratio: 0.05
+  label_smoothing: 0.1
+  grad_clip: 1.0
+  patience: 2
+  amp: true
+  log_every: 100
+
+tfidf:
+  max_features: 200000
+  ngram_max: 2
+  min_df: 2
+  C_grid: [1, 5, 20]
+
+late_fusion:
+  w_step: 0.05

@@ -1,0 +1,9 @@
+[project]
+name = "foodmm"
+version = "0.1.0"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+markers = ["network: downloads a tiny model config/tokenizer from the Hugging Face Hub"]
