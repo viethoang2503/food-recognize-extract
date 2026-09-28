@@ -107,7 +107,7 @@ Mỗi dòng jsonl gồm: `id, label, mode, valid, attempts, latency_s, output` (
 - **Latency**: trung bình và p90, tính cả retry.
 - **Dish accuracy**: `map_dish_to_class(dish_name, classes)`.
   - Nếu một cụm tên lớp (có biến thể số ít/số nhiều) nằm trong `dish_name` thì chọn cụm dài nhất.
-  - Nếu không, lấy lớp có điểm cao nhất, với điểm là max của `difflib.SequenceMatcher` ratio và Jaccard theo từ.
+  - Nếu không, lấy lớp có điểm cao nhất, với điểm là max của `difflib.SequenceMatcher` ratio và hệ số overlap theo từ (|A∩B| / min(|A|, |B|), để "fries" khớp `french_fries`).
   - Dưới `vlm.match_threshold` (0.6) thì là `unmapped`.
   - Báo cáo accuracy (unmapped tính là sai) và tỷ lệ unmapped.
 - **Ingredient grounding**: với mỗi nguyên liệu dự đoán, kiểm tra có từ nội dung nào (≥ 3 ký tự, không phải từ nối, có biến thể số ít/số nhiều) xuất hiện trong text gốc chưa che của mẫu hay không. Điểm của một mẫu là tỷ lệ nguyên liệu khớp; báo cáo trung bình trên các mẫu hợp lệ có nguyên liệu. Text UPMC là text trang web nên nhiễu. Chỉ số này là proxy, không phải ground truth.

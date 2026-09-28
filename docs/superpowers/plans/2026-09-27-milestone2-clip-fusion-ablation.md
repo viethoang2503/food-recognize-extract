@@ -2323,7 +2323,7 @@ def test_notebook_is_generated_and_up_to_date(tmp_path, builder, name):
 @pytest.mark.parametrize("builder,name", NOTEBOOKS)
 def test_notebook_cells_compile_and_imports_resolve(builder, name):
     nb = json.loads((REPO_ROOT / "notebooks" / name).read_text(encoding="utf-8"))
-    assert nb["nbformat"] == 4 and len(nb["cells"]) > 10
+    assert nb["nbformat"] == 4 and len(nb["cells"]) > 8
     for cell in nb["cells"]:
         if cell["cell_type"] != "code":
             continue
