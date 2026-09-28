@@ -2050,7 +2050,6 @@ def _train_one_epoch(model, loader, forward_fn, optimizer, scheduler, scaler, cr
         if cfg.log_every and step % cfg.log_every == 0:
             print(f"  step {step}/{len(loader)} loss={total_loss / n_seen:.4f}", flush=True)
     return total_loss / max(1, n_seen)
-```
 
 
 def fit(model: nn.Module, train_loader, val_loader, forward_fn, optimizer, scheduler, cfg: FitConfig,
