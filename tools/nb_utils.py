@@ -87,7 +87,7 @@ def run(script, *args):
 def add_data(nb: NotebookBuilder) -> None:
     nb.md(r'''
 ## Dữ liệu
-Giải nén bản zip trên Drive về `/content` (lần đầu tải từ Kaggle, cần Colab Secrets `KAGGLE_USERNAME`, `KAGGLE_KEY`). `prepare_data.py` bỏ qua nếu manifest đã có từ Mốc 1.
+Giải nén bản zip trên Drive về `/content` (lần đầu tải từ Kaggle, cần Colab Secret `KAGGLE_API_TOKEN`, hoặc cặp `KAGGLE_USERNAME` + `KAGGLE_KEY`). `prepare_data.py` bỏ qua nếu manifest đã có từ Mốc 1.
 ''')
     nb.code(r'''
 import zipfile
@@ -96,8 +96,13 @@ from google.colab import userdata
 ZIP_PATH = WORK_DIR / "data" / "upmcfood101.zip"
 ZIP_PATH.parent.mkdir(parents=True, exist_ok=True)
 if not ZIP_PATH.exists():
-    os.environ["KAGGLE_USERNAME"] = userdata.get("KAGGLE_USERNAME")
-    os.environ["KAGGLE_KEY"] = userdata.get("KAGGLE_KEY")
+    from google.colab.userdata import SecretNotFoundError
+    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-U", "kaggle"], check=True)  # new token style needs a recent client
+    try:  # new-style token (KGAT_...) first, then the legacy username + key pair
+        os.environ["KAGGLE_API_TOKEN"] = userdata.get("KAGGLE_API_TOKEN")
+    except SecretNotFoundError:
+        os.environ["KAGGLE_USERNAME"] = userdata.get("KAGGLE_USERNAME")
+        os.environ["KAGGLE_KEY"] = userdata.get("KAGGLE_KEY")
     subprocess.run(["kaggle", "datasets", "download", "-d", "gianmarco96/upmcfood101", "-p", str(ZIP_PATH.parent)], check=True)
 if not DATA_ROOT.exists():
     DATA_ROOT.mkdir(parents=True)
