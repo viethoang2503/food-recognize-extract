@@ -91,5 +91,6 @@ def clip_smoke_overrides(data_root: Path, work_dir: Path) -> list[str]:
         "clip.corruptions.blur=[2]", "clip.corruptions.noise=[0.1]", "clip.corruptions.word_drop=[0.5]",
         "head.epochs=2", "head.batch_size=16", "head.hidden=16", "head.xattn_dim=16", "head.xattn_heads=2",
         "clip_suite.masks=[none,strict]", "clip_suite.fusion_heads=[concat,gated,xattn]",
-        "clip_suite.missing_md=[0.3]", "clip_suite.frac_heads=[image,xattn]", "clip_suite.fracs=[0.5]",
     ]
+
+TINY_VLM_MODEL = "trl-internal-testing/tiny-Qwen3VLForConditionalGeneration"

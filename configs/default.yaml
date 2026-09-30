@@ -104,8 +104,51 @@ head:
   xattn_layers: 1
 
 clip_suite:
-  masks: [none, exact, strict]
+  masks: [none, strict]
   fusion_heads: [concat, gated, xattn]
-  missing_md: [0.0, 0.3]
-  frac_heads: [image, text, concat, xattn]
-  fracs: [0.1, 0.25, 0.5]
+
+stats:
+  n_boot: 1000
+  alpha: 0.05
+  pairs:                   # [a, b] run dirs relative to paths.work_dir; diff = acc(b) - acc(a)
+    - [clip/runs/image, clip/runs/text_strict]
+    - [clip/runs/image, clip/runs/xattn_strict]
+    - [clip/runs/text_strict, clip/runs/xattn_strict]
+    - [clip/runs/late_strict, clip/runs/xattn_strict]
+    - [clip/runs/concat_strict, clip/runs/xattn_strict]
+    - [clip/runs/gated_strict, clip/runs/xattn_strict]
+    - [clip/runs/zeroshot, clip/runs/image]
+    - [runs/image, runs/early_strict]
+    - [runs/text_strict, runs/early_strict]
+    - [runs/late_strict, runs/early_strict]
+    - [runs/early_strict, clip/runs/xattn_strict]
+
+vlm:
+  model_name: Qwen/Qwen3-VL-4B-Instruct   # Qwen/Qwen3-VL-8B-Instruct also works
+  tag: qwen3vl4b                          # output folder name under work_dir/vlm/
+  backend: hf                             # hf | fake (tests only)
+  quantize: auto                          # auto: bf16 on compute capability >= 8 (L4/A100), else 4-bit
+  allow_cpu: false                        # true only for tests with a tiny model
+  max_new_tokens: 256
+  max_image_side: 768
+  n_samples: 200
+  text_mask: strict                       # text given to the text and image_text modes
+  max_context_chars: 1000
+  match_threshold: 0.6
+  n_grading: 20
+  n_boot: 1000                            # bootstrap resamples for the dish-accuracy CI
+  compare_runs:                           # classifiers scored on the same sample ids (relative to paths.work_dir)
+    image: clip/runs/image
+    text: clip/runs/text_strict
+    image_text: clip/runs/xattn_strict
+  log_every: 20
+
+demo:
+  text_mask: strict        # user text is cleaned and masked like the training data of the heads
+  image_run: image
+  text_run: null           # null -> text_<demo.text_mask>
+  fusion_run: xattn_strict # a Milestone 2 head run (trained with modality dropout)
+  top_k: 5
+  n_examples: 8
+  vlm: true                # show the VLM checkbox
+  server_port: 7860

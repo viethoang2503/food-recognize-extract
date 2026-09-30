@@ -9,3 +9,4 @@ pyyaml
 pillow
 matplotlib
 pytest
+gradio==6.28.0
