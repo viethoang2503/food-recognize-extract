@@ -25,7 +25,7 @@ Notebook điều khiển: clone repo, chuẩn bị dữ liệu, chạy 9 run và
 
 **Trước khi chạy**
 1. Runtime → Change runtime type → chọn GPU.
-2. Colab Secrets (biểu tượng chìa khóa): thêm `KAGGLE_USERNAME` và `KAGGLE_KEY` (kaggle.com → Settings → API → Create New Token), bật quyền cho notebook.
+2. Colab Secrets (biểu tượng chìa khóa): thêm `KAGGLE_API_TOKEN` (token mới `KGAT_...`) hoặc cặp `KAGGLE_USERNAME` + `KAGGLE_KEY` (kaggle.com → Settings → API → Create New Token), bật quyền cho notebook.
 3. Chạy lần lượt từ trên xuống. Mọi lệnh train có thể chạy lại sau khi mất session: run đã xong sẽ được bỏ qua, run dở dang tự resume.
 ''')
 
@@ -86,8 +86,13 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 ZIP_PATH = CACHE_DIR / "upmcfood101.zip"
 
 if not ZIP_PATH.exists():
-    os.environ["KAGGLE_USERNAME"] = userdata.get("KAGGLE_USERNAME")
-    os.environ["KAGGLE_KEY"] = userdata.get("KAGGLE_KEY")
+    from google.colab.userdata import SecretNotFoundError
+    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-U", "kaggle"], check=True)  # new token style needs a recent client
+    try:  # new-style token (KGAT_...) first, then the legacy username + key pair
+        os.environ["KAGGLE_API_TOKEN"] = userdata.get("KAGGLE_API_TOKEN")
+    except SecretNotFoundError:
+        os.environ["KAGGLE_USERNAME"] = userdata.get("KAGGLE_USERNAME")
+        os.environ["KAGGLE_KEY"] = userdata.get("KAGGLE_KEY")
     subprocess.run(["kaggle", "datasets", "download", "-d", "gianmarco96/upmcfood101", "-p", str(CACHE_DIR)], check=True)
 
 if not DATA_ROOT.exists():
