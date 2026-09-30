@@ -1,31 +1,31 @@
-# Mốc 2: Embedding CLIP, các kiểu fusion nâng cao và ablation
+# Mốc 2: Embedding CLIP và các kiểu fusion nâng cao
 
 - Ngày: 2026-09-27
-- Trạng thái: đã duyệt thiết kế, chờ duyệt spec
+- Trạng thái: đã duyệt, đang triển khai (Task 1–5 xong, Task 6 đang làm). Cập nhật 2026-09-28: thêm khoảng tin cậy và kiểm định McNemar (Task 8b); thu gọn phạm vi (bỏ ablation nhiễu, tỷ lệ dữ liệu, modality dropout 0/0.3 và chế độ che `exact`)
 - Phạm vi: sub-project 2 trong 4. Dùng lại manifest, config, metrics, late fusion và analysis của Mốc 1.
 
 ## 1. Mục tiêu
 
-Dùng CLIP ViT-B/16 đóng băng làm encoder chung cho ảnh và text, trích xuất đặc trưng một lần, rồi huấn luyện nhiều head fusion nhẹ trên đặc trưng đã lưu. Nhờ vậy có thể chạy nhiều ablation với chi phí thấp, và trả lời:
+Dùng CLIP ViT-B/16 đóng băng làm encoder chung cho ảnh và text, trích xuất đặc trưng một lần, rồi huấn luyện các head fusion nhẹ trên đặc trưng đã lưu, và trả lời:
 
-1. Kiểu fusion nào tốt nhất khi encoder giống nhau (late, concat, gated, cross-attention)?
-2. Fusion chịu được thiếu modality và nhiễu tới mức nào? Modality dropout có giúp không?
-3. Khi ít dữ liệu train, multimodal có lợi hơn đơn modality nhiều hơn không?
-4. Leakage tên món trong text ảnh hưởng thế nào (3 chế độ che)?
+1. Kết hợp ảnh và text có tốt hơn đơn modality một cách có ý nghĩa thống kê không?
+2. Kiểu fusion nào tốt nhất khi encoder giống nhau (late, concat, gated, cross-attention)?
+3. Fusion còn hoạt động thế nào khi thiếu một modality lúc test?
+4. Leakage tên món trong text ảnh hưởng thế nào (`none` so với `strict`)?
 
 ### Tiêu chí hoàn thành
 
 1. Baseline zero-shot CLIP trên test (prompt `a photo of {món}, a type of food`).
-2. Bảng test (Acc, Top-5, Macro-F1) cho 6 head (`image`, `text`, `late`, `concat`, `gated`, `xattn`) × 3 chế độ che (`image` chỉ có 1 run), với modality dropout mặc định.
-3. Bảng thiếu modality: mỗi head fusion, chế độ che chính, huấn luyện với modality dropout 0 và 0.3, đánh giá khi đủ / thiếu ảnh / thiếu text.
-4. Bảng và biểu đồ nhiễu: blur, gaussian noise (ảnh) và word drop (text), mỗi loại 3 mức, trên test.
-5. Đường cong theo tỷ lệ dữ liệu train 10/25/50/100% cho `image`, `text`, `concat`, `xattn`.
-6. t-SNE đặc trưng ảnh, text và đặc trưng fusion trên một mẫu test.
-7. Pytest trên CPU với CLIP tí hon (`hf-internal-testing/tiny-random-CLIPModel`) và pass.
+2. Bảng test (Acc, Top-5, Macro-F1) cho 6 head (`image`, `text`, `late`, `concat`, `gated`, `xattn`) × 2 chế độ che `none`, `strict` (`image` chỉ có 1 run), với modality dropout mặc định 0.1.
+3. Bảng thiếu modality: mỗi head fusion (chế độ che chính) được đánh giá khi đủ / thiếu ảnh / thiếu text. Dùng lại run chính, không train thêm.
+4. t-SNE đặc trưng ảnh, text và đặc trưng fusion trên một mẫu test.
+5. Khoảng tin cậy 95% (bootstrap) cho accuracy của mọi run trong bảng chính, và bảng kiểm định cặp (chênh lệch accuracy có khoảng tin cậy, p-value McNemar) cho các so sánh image / text / fusion chính, gồm cả run của Mốc 1.
+6. Pytest trên CPU với CLIP tí hon (`hf-internal-testing/tiny-random-CLIPModel`) và pass.
 
 ### Ngoài phạm vi
 
 - Fine-tune CLIP. Fusion bilinear. VLM (sub-project 3), demo (sub-project 4).
+- Ablation nhiễu (blur, gaussian noise, word drop), đường cong theo tỷ lệ dữ liệu train, so sánh modality dropout 0 / 0.1 / 0.3, và chế độ che `exact`. Code nhiễu (`corrupt.py`) và tham số `head.train_frac`, `head.modality_dropout` đã có từ Task 1–6 nên vẫn chạy tay được bằng `train_head.py`, nhưng không nằm trong tiêu chí.
 
 ## 2. Quyết định đã chốt
 
@@ -37,7 +37,7 @@ Dùng CLIP ViT-B/16 đóng băng làm encoder chung cho ảnh và text, trích x
 | Token ảnh | Lưới patch 14×14 (bỏ CLS) → adaptive average pool 4×4 = 16 token, 768 chiều |
 | Token text | Token hợp lệ (tối đa 77) chia đều thành 16 đoạn liên tiếp, mean-pool mỗi đoạn, 512 chiều, kèm mask 16 phần tử (đoạn rỗng = 0) |
 | Lưu trữ | Thư mục `.npy` fp16 trên Drive, đọc bằng mmap. Ước tính khoảng 4 GB cho mỗi chế độ che, dư chỗ với 5 TB |
-| Chế độ che chính cho ablation | `strict` (đặt trong config `clip.main_mask`) |
+| Chế độ che chính | `strict` (đặt trong config `clip.main_mask`) |
 | Head | Huấn luyện trên đặc trưng đã lưu, vài phút mỗi run |
 
 ## 3. Kiến trúc
@@ -49,15 +49,17 @@ src/foodmm/clip/
 ├── __init__.py
 ├── encoder.py      # ClipEncoder: nạp CLIPModel + processor, encode_images, encode_texts, encode_prompts
 ├── features.py     # lưu/đọc feature store (shard .npy), căn theo ids của manifest
-├── corrupt.py      # blur, gaussian noise cho ảnh; word drop cho text (có seed)
+├── corrupt.py      # blur, gaussian noise, word drop (đã có, không chạy trong phạm vi hiện tại)
 ├── heads.py        # ImageHead, TextHead, ConcatHead, GatedHead, CrossAttnHead, build_head
-├── train_heads.py  # FeatureDataset, fit_head, predict_head, đánh giá thiếu modality và nhiễu
+├── train_heads.py  # FeatureBank, fit_head, predict_head, đánh giá thiếu modality
+├── suite.py        # danh sách run chính
 └── zero_shot.py    # logits zero-shot từ embedding ảnh và prompt
+src/foodmm/stats.py # bootstrap CI, McNemar, so sánh cặp run (dùng chung với sub-project 3)
 scripts/
 ├── extract_clip.py     # trích xuất đặc trưng (resume theo shard)
 ├── zero_shot_clip.py
 ├── train_head.py       # một run head
-├── run_clip_suite.py   # chạy toàn bộ run chính và ablation, bỏ qua run đã xong
+├── run_clip_suite.py   # chạy toàn bộ run chính, bỏ qua run đã xong
 └── summarize_clip.py   # gom bảng, vẽ hình
 notebooks/02_milestone2.ipynb   # sinh bởi tools/build_notebook.py
 ```
@@ -72,9 +74,7 @@ Notebook của Mốc 2, 3, 4 dùng chung `tools/nb_utils.py` (lớp `NotebookBui
 MyDrive/foodmm/clip/
 ├── features/vitb16/<tên>/       # ids.npy, pooled.npy, tokens.npy, token_mask.npy (text), done.json
 │   ├── image_{train,val,test}
-│   ├── text_{none,exact,strict}_{train,val,test}
-│   ├── image_test_{blur1,blur2,blur4,noise0.05,noise0.1,noise0.2}
-│   └── text_strict_test_{drop0.25,drop0.5,drop0.75}
+│   └── text_{none,strict}_{train,val,test}
 ├── runs/<run>/                  # config.yaml, best.pt, history.json, preds_{val,test}.npz,
 │                                # preds_robust.npz, metrics_test.json, metrics_robust.json
 └── results/                     # bảng .csv/.md và hình .png
@@ -89,10 +89,7 @@ Run của Mốc 2 nằm trong `clip/runs/`, tách khỏi `runs/` của Mốc 1, 
 - `ClipEncoder.encode_texts(list[str]) -> (pooled[N,512], tokens[N,16,512], mask[N,16])`: truncation 77; `text_embeds` chuẩn hóa L2; token từ `last_hidden_state` theo cách chia đoạn ở mục 2.
 - `[MASK]` không phải token đặc biệt của CLIP, tokenizer tách thành vài mảnh. Điều này chấp nhận được vì mọi chế độ che đều được xử lý như nhau.
 - Ghi theo shard (`clip.shard_size`, mặc định 2048 mẫu). Chạy lại thì bỏ qua shard đã có. Khi đủ shard thì ghép thành `.npy` và ghi `done.json`. Feature set đã có `done.json` thì bỏ qua, trừ khi có `--force`.
-- Tham số: `--parts image,text_none,text_exact,text_strict,corrupt` và `--splits train,val,test`. `corrupt` chỉ chạy trên test, với các mức trong `clip.corruptions`.
-- **Nhiễu ảnh** áp lên ảnh PIL gốc trước processor: Gaussian blur bán kính {1, 2, 4}; gaussian noise độ lệch chuẩn {0.05, 0.1, 0.2} trên thang [0, 1].
-- **Nhiễu text:** bỏ mỗi từ với xác suất {0.25, 0.5, 0.75}, áp lên cột text của `clip.main_mask`.
-- Seed của mỗi mẫu là `seed + crc32(id)`, nên kết quả tái lập được.
+- Tham số: `--parts` và `--splits train,val,test`. Notebook chạy `--parts image,text_none,text_strict`. Các phần `text_exact` và `corrupt` (nhiễu trên test) vẫn có trong code nhưng không chạy.
 
 ## 5. Zero-shot (`zero_shot_clip.py`)
 
@@ -119,29 +116,26 @@ Mọi head nhận batch dict `img` [B,512], `txt` [B,512], và nếu cần thì 
 - `head.train_frac < 1`: lấy mẫu stratified theo lớp từ tập train, seed cố định, mỗi lớp giữ ít nhất 1 mẫu.
 - Tên run: `image`, `text_<mask>`, `<head>_<mask>`, thêm hậu tố `_md<p>` nếu modality dropout khác mặc định, và `_frac<f>` nếu `train_frac < 1`. Ví dụ: `xattn_strict_md0.3`, `concat_strict_frac0.1`.
 - Sau khi train: nạp `best.pt`, lưu `preds_val.npz` và `preds_test.npz` (cùng khóa với Mốc 1: `logits, labels, ids, features`), `metrics_test.json` (khóa của Mốc 1, thêm `head, modality_dropout, train_frac, best_val_acc`, và `mean_gate` với `gated`).
-- **Đánh giá độ bền** trên test: điều kiện `full`, `no_image`, `no_text` (bỏ điều kiện không áp dụng cho head đơn modality), và mọi feature set nhiễu đã có. Nhiễu ảnh đi với text sạch, nhiễu text đi với ảnh sạch. Kết quả ghi vào `metrics_robust.json` (danh sách `{condition, acc, top5, macro_f1}`) và `preds_robust.npz` (logits theo từng điều kiện).
+- **Đánh giá thiếu modality** trên test: điều kiện `full`, `no_image`, `no_text` (bỏ điều kiện không áp dụng cho head đơn modality). Code cũng đánh giá các feature set nhiễu nếu đã được trích xuất, và bỏ qua nếu chưa có. Kết quả ghi vào `metrics_robust.json` (danh sách `{condition, acc, top5, macro_f1}`) và `preds_robust.npz` (logits theo từng điều kiện).
 - `late_<mask>`: w dò trên val sạch. Với từng điều kiện, kết hợp logits bền của `image` và `text_<mask>`. Khi thiếu ảnh chỉ dùng xác suất text, và ngược lại.
 - Run đã có `metrics_test.json` sẽ bị bỏ qua, trừ khi có `--force`. Head train nhanh nên không cần resume giữa chừng.
 
 ## 8. Danh sách run (`run_clip_suite.py`)
 
-`run_clip_suite.py --stage main|missing|frac|all` gọi các hàm trong process, bỏ qua run đã xong, và in bảng tiến độ.
+`run_clip_suite.py` gọi các hàm trong process, bỏ qua run đã xong, và in bảng tiến độ.
 
 | Nhóm | Run |
 |---|---|
 | Zero-shot | `zeroshot` |
-| Chính (md 0.1) | `image`; `text_{none,exact,strict}`; `{concat,gated,xattn}_{none,exact,strict}`; `late_{none,exact,strict}` |
-| Thiếu modality | `{concat,gated,xattn}_strict_md0` và `_md0.3`. Run md 0.1 lấy từ nhóm chính |
-| Tỷ lệ dữ liệu | `{image,text_strict,concat_strict,xattn_strict}_frac{0.1,0.25,0.5}`. Tỷ lệ 1.0 lấy từ nhóm chính |
+| Chính (md 0.1) | `image`; `text_{none,strict}`; `{concat,gated,xattn}_{none,strict}`; `late_{none,strict}` |
 
-Tổng cộng khoảng 35 lần train head. Ước tính mỗi run mất vài phút trên GPU; con số thật sẽ đo trên Colab.
+Tổng cộng 12 job (9 lần train head, 2 late fusion, 1 zero-shot). Ước tính mỗi run mất vài phút trên GPU; con số thật sẽ đo trên Colab.
 
 ## 9. Tổng hợp và phân tích (`summarize_clip.py`, `foodmm/clip/report.py`)
 
-- `main.csv/.md`: Acc, Top-5, Macro-F1 cho zero-shot và các run chính.
-- `missing.csv/.md`: hàng là head × md, cột là `full / no_image / no_text`.
-- `robust.csv` và `robust.png`: accuracy theo mức nhiễu, mỗi loại nhiễu một subplot, mỗi head một đường.
-- `frac.csv` và `frac.png`: accuracy theo tỷ lệ dữ liệu train.
+- `main.csv/.md`: Acc (kèm `acc_lo`, `acc_hi`: khoảng tin cậy 95% bằng bootstrap), Top-5, Macro-F1 cho zero-shot và các run chính.
+- `significance.csv/.md`: mỗi cặp run trong `stats.pairs` một hàng, gồm `n, acc_a, acc_b, diff` (= acc_b − acc_a), `diff_lo, diff_hi` (bootstrap có ghép cặp), số mẫu chỉ một bên đúng, và `mcnemar_p`. McNemar dùng kiểm định nhị thức chính xác khi số mẫu bất đồng ≤ 50, còn lại dùng χ² có hiệu chỉnh liên tục. Cặp mặc định: image vs text, image vs xattn, text vs xattn, late/concat/gated vs xattn, zero-shot vs image (Mốc 2); image vs early, text vs early, late vs early (Mốc 1); early (Mốc 1) vs xattn (Mốc 2). Run được ghép theo `ids`, run chưa có thì bỏ qua kèm thông báo.
+- `missing.csv/.md`: hàng là các run fusion (`late`, `concat`, `gated`, `xattn`) của chế độ che chính, cột là `full / no_image / no_text`.
 - Trong notebook: t-SNE (sklearn, perplexity 30) trên 20 lớp × tối đa 50 mẫu test, cho 3 loại đặc trưng: pooled ảnh, pooled text (`strict`) và `features` của `xattn_strict`. Có thêm so sánh Mốc 1 với Mốc 2 nếu `runs/` của Mốc 1 đã có kết quả.
 
 ## 10. Xử lý lỗi
@@ -158,10 +152,13 @@ Tổng cộng khoảng 35 lần train head. Ước tính mỗi run mất vài ph
 ## 11. Kiểm thử (pytest, CPU)
 
 - `test_clip_heads.py`: shape đầu ra của mọi head; `drop_modalities` đúng; mean-pool khi mask toàn 0 trả về 0; modality dropout không bao giờ bỏ cả 2 nhánh.
-- `test_clip_corrupt.py`: nhiễu tái lập theo seed, đúng mức, word drop giữ ít nhất 1 từ.
+- `test_clip_corrupt.py` (đã có): nhiễu tái lập theo seed, đúng mức, word drop giữ ít nhất 1 từ.
 - `test_clip_features.py`: ghi shard, resume, ghép, đọc lại, và kiểm tra ids.
+- `test_stats.py`: bootstrap CI (tất định theo seed, rỗng thì NaN), McNemar (chính xác và χ²), ghép cặp theo ids, báo lỗi khi không có id chung.
+- `test_clip_suite.py`: danh sách 12 job, chạy suite trên đặc trưng giả.
+- `test_clip_report.py`: bảng chính, bảng thiếu modality, t-SNE, thêm khoảng tin cậy trong bảng chính và bảng kiểm định (bỏ qua cặp thiếu run).
 - `test_clip_encoder.py` (mark `network`): CLIP tí hon cho ra shape đúng, token text có mask.
-- `test_clip_pipeline.py` (mark `network`): dataset giả, rồi `prepare_data` → `extract_clip` (tất cả các phần) → `zero_shot_clip` → `run_clip_suite --stage all` với cấu hình tí hon → `summarize_clip`, kiểm tra file và khóa đầu ra.
+- `test_clip_pipeline.py` (mark `network`): dataset giả, rồi `prepare_data` → `extract_clip` (`image,text_none,text_strict`) → `zero_shot_clip` → `run_clip_suite` với cấu hình tí hon → `summarize_clip`, kiểm tra file và khóa đầu ra.
 - `test_notebooks.py`: notebook 02 sinh ra đúng, các cell compile, các import `foodmm` chạy được.
 
 ## 12. Phụ thuộc
@@ -170,6 +167,7 @@ Không thêm gói mới. CLIP dùng `transformers==5.17.0`, t-SNE dùng `scikit-
 
 ## 13. Rủi ro
 
+- Khoảng tin cậy và McNemar chỉ phản ánh độ bất định do tập test hữu hạn, không phản ánh độ bất định do seed huấn luyện. Chạy nhiều seed nằm ngoài phạm vi vì chi phí; báo cáo cần nêu rõ điểm này.
 - CLIP chỉ thấy tối đa 77 token text, trong khi Mốc 1 cho DistilBERT thấy 256 token. So sánh text giữa 2 mốc cần nêu rõ điểm này.
 - Head `xattn` với chỉ 16 token mỗi bên là phiên bản gọn. Nếu cần, có thể tăng số token bằng cách trích xuất lại (tham số `clip.n_tokens`).
 - Tốc độ đọc ảnh có thể là nút thắt khi trích xuất. Dùng DataLoader với `data.num_workers` để giảm.

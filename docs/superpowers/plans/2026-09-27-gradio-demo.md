@@ -2,20 +2,21 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A password-protected Gradio app on Colab: upload a food photo and optional text, see top-5 predictions of the image, text and fusion heads side by side, optionally extract JSON with the VLM, and browse precomputed examples.
+**Goal:** A password-protected Gradio app on Colab: upload a food photo and optional text, see top-5 predictions of the image, text and fusion heads side by side, optionally extract JSON with the VLM (mode chosen from the inputs: `image_text`, `image` or `text`, like sub-project 3), and browse precomputed examples.
 
 **Architecture:** Sub-package `src/foodmm/demo/` (predictor, vlm_service, examples, app). `DemoPredictor` wraps one frozen `ClipEncoder` plus three Milestone 2 heads loaded from `work_dir/clip/runs`. `LazyVLM` wraps the sub-project 3 backend and loads it on first use. UI callbacks are plain functions so they are tested without a server.
 
 **Tech Stack:** `gradio==6.28.0`, Milestone 2 CLIP heads, sub-project 3 VLM backend.
 
 **Spec:** `docs/superpowers/specs/2026-09-27-gradio-demo-design.md`
-**Depends on:** Milestones 1–2 and sub-project 3 plans implemented.
+**Depends on:** Milestones 1–2 and sub-project 3 plans implemented (the demo imports `foodmm.vlm.backend`, `foodmm.vlm.extract` and `foodmm.vlm.prompts` with the `text` mode). Running the real app needs the Milestone 2 runs `image`, `text_strict` and `xattn_strict`.
 
 ## Global Constraints
 
 - Same CLI/test/commit conventions as before.
 - Label dicts use display names (`class_to_phrase`, e.g. `apple pie`) → probability (float), sorted by probability, at most `demo.top_k` entries.
-- `DemoPredictor.predict` returns keys `image`, `text`, `fusion` (label dict or `None`), `masked_text` (str), `top3_fusion` (list of `(class_name, prob)` with raw class names, for VLM hints).
+- `DemoPredictor.predict` returns keys `image`, `text`, `fusion` (label dict or `None`), `masked_text` (str).
+- VLM mode in the demo: image + text → `image_text` (masked text), image only → `image`, text only → `text`. The chosen mode is returned in the JSON under `mode`.
 - A public share link is never created without auth unless `--no_auth` is passed explicitly.
 - Tests marked `network` download the tiny CLIP.
 
@@ -43,7 +44,7 @@
 - Test: `tests/test_demo_app.py`
 
 **Interfaces:**
-- Produces: `LazyVLM(factory, max_image_side=768)` with `.extract(image, hints=None) -> dict`, `.factory_calls`; `make_handlers(predictor, vlm, examples) -> (on_predict, on_example)`; `on_predict(image, text, use_vlm) -> (img_labels, txt_labels, fusion_labels, masked_text, vlm_json)`; `on_example(name) -> (PIL | None, text, img_labels, txt_labels, fusion_labels, masked_text, vlm_json)`; `build_app(predictor, vlm=None, examples=None) -> gr.Blocks`. `examples` items: `{name, id, label, image_path (absolute), text, pred: {image, text, fusion, masked_text}, vlm}`.
+- Produces: `choose_mode(has_image, has_text) -> str | None`; `LazyVLM(factory, max_image_side=768)` with `.extract(image, text=None) -> dict` (valid output plus `mode`, or `{error, ...}`), `.factory_calls`; `make_handlers(predictor, vlm, examples) -> (on_predict, on_example)`; `on_predict(image, text, use_vlm) -> (img_labels, txt_labels, fusion_labels, masked_text, vlm_json)`; `on_example(name) -> (PIL | None, text, img_labels, txt_labels, fusion_labels, masked_text, vlm_json)`; `build_app(predictor, vlm=None, examples=None) -> gr.Blocks`. `examples` items: `{name, id, label, image_path (absolute), text, pred: {image, text, fusion, masked_text}, vlm}`.
 
 - [ ] **Step 1: Append to `configs/default.yaml`**
 
@@ -95,7 +96,7 @@ import pytest
 from PIL import Image
 
 from foodmm.demo.app import build_app, make_handlers
-from foodmm.demo.vlm_service import LazyVLM
+from foodmm.demo.vlm_service import LazyVLM, choose_mode
 from foodmm.vlm.backend import FakeBackend
 
 IMG = Image.new("RGB", (16, 16), (200, 120, 40))
@@ -107,22 +108,32 @@ class FakePredictor:
         if image is None and not (text or "").strip():
             raise ValueError("Cần ảnh hoặc text")
         return {"image": TOP if image is not None else None, "text": TOP if text else None, "fusion": TOP,
-                "masked_text": "best [MASK]" if text else "", "top3_fusion": [("apple_pie", 0.7)]}
+                "masked_text": "best [MASK]" if text else ""}
 
 
 EXAMPLES = [{"name": "1. apple pie", "id": "x", "label": "apple_pie", "image_path": None, "text": "best apple pie",
              "pred": {"image": TOP, "text": TOP, "fusion": TOP, "masked_text": "best [MASK]"}, "vlm": {"dish_name": "pie"}}]
 
 
+def test_choose_mode():
+    assert choose_mode(True, True) == "image_text"
+    assert choose_mode(True, False) == "image"
+    assert choose_mode(False, True) == "text"
+    assert choose_mode(False, False) is None
+
+
 def test_lazy_vlm_loads_once():
     fb = FakeBackend()
     calls = []
     vlm = LazyVLM(lambda: calls.append(1) or fb)
-    assert vlm.extract(None) == {"error": "VLM cần một ảnh"}
-    assert vlm.extract(IMG, [("apple_pie", 0.7)])["dish_name"] == "apple pie"
-    vlm.extract(IMG)
+    assert vlm.extract(None, "  ") == {"error": "VLM cần ảnh hoặc text"} and not calls
+    out = vlm.extract(IMG)
+    assert out["dish_name"] == "apple pie" and out["mode"] == "image"
+    assert vlm.extract(IMG, "best [MASK]")["mode"] == "image_text"
+    assert vlm.extract(None, "best [MASK]")["mode"] == "text"
     assert len(calls) == 1 and vlm.factory_calls == 1
-    assert "classifier suggests" in fb.calls[0][0] and "classifier" not in fb.calls[1][0]
+    assert "photo" in fb.calls[0][0] and "[MASK]" in fb.calls[1][0]
+    assert fb.images[1] is not None and fb.images[2] is None  # text mode sends no image
 
 
 def test_lazy_vlm_remembers_load_error():
@@ -144,7 +155,9 @@ def test_on_predict():
     img, txt, fus, masked, vlm = on_predict(IMG, "best apple pie", False)
     assert img == TOP and txt == TOP and fus == TOP and masked == "best [MASK]" and vlm is None
     *_, vlm = on_predict(IMG, "", True)
-    assert vlm["dish_name"] == "apple pie"
+    assert vlm["dish_name"] == "apple pie" and vlm["mode"] == "image"
+    assert on_predict(IMG, "best apple pie", True)[4]["mode"] == "image_text"
+    assert on_predict(None, "best apple pie", True)[4]["mode"] == "text"
     img, txt, fus, masked, vlm = on_predict(None, "  ", True)
     assert img is None and fus is None and "Cần ảnh" in vlm["error"]
 
@@ -188,11 +201,20 @@ Expected: ERROR `ModuleNotFoundError: No module named 'foodmm.demo'`.
 """Load the VLM backend on first use and turn every failure into an error dict."""
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 
 from ..vlm.backend import resize_for_vlm
 from ..vlm.extract import extract_one
 from ..vlm.prompts import build_prompt
+
+
+def choose_mode(has_image: bool, has_text: bool) -> str | None:
+    """Same modes as sub-project 3: image_text if both inputs are given, else image or text."""
+    if has_image and has_text:
+        return "image_text"
+    if has_image:
+        return "image"
+    return "text" if has_text else None
 
 
 class LazyVLM:
@@ -203,9 +225,12 @@ class LazyVLM:
         self.max_image_side = int(max_image_side)
         self.factory_calls = 0
 
-    def extract(self, image, hints: Sequence[tuple[str, float]] | None = None) -> dict:
-        if image is None:
-            return {"error": "VLM cần một ảnh"}
+    def extract(self, image, text: str | None = None) -> dict:
+        """`text` is the already masked text shown to the user."""
+        text = (text or "").strip()
+        mode = choose_mode(image is not None, bool(text))
+        if mode is None:
+            return {"error": "VLM cần ảnh hoặc text"}
         if self._error:
             return {"error": self._error}
         if self._backend is None:
@@ -218,9 +243,11 @@ class LazyVLM:
             except Exception as e:  # noqa: BLE001 - shown to the user instead of crashing the app
                 self._error = f"Không nạp được VLM: {e}. Hãy xem tab 'Ví dụ có sẵn'."
                 return {"error": self._error}
-        prompt = build_prompt("image_hint", hints=hints) if hints else build_prompt("image")
-        rec = extract_one(self._backend, resize_for_vlm(image, self.max_image_side), prompt)
-        return rec["output"] if rec["valid"] else {"error": rec["error"], "raw": rec["raw"]}
+        prompt = build_prompt(mode, text=text)
+        img = resize_for_vlm(image, self.max_image_side) if mode != "text" else None
+        rec = extract_one(self._backend, img, prompt)
+        return {"mode": mode, **rec["output"]} if rec["valid"] else \
+            {"mode": mode, "error": rec["error"], "raw": rec["raw"]}
 ```
 
 - [ ] **Step 8: Implement `src/foodmm/demo/app.py`**
@@ -244,7 +271,7 @@ def make_handlers(predictor, vlm, examples: Sequence[dict] | None):
             res = predictor.predict(image, text)
         except ValueError as e:
             return None, None, None, "", {"error": str(e)}
-        vlm_out = vlm.extract(image, res["top3_fusion"]) if (use_vlm and vlm is not None) else None
+        vlm_out = vlm.extract(image, res["masked_text"]) if (use_vlm and vlm is not None) else None
         return res["image"], res["text"], res["fusion"], res["masked_text"], vlm_out
 
     def on_example(name):
@@ -309,7 +336,7 @@ def build_app(predictor, vlm=None, examples: Sequence[dict] | None = None):
 - [ ] **Step 9: Run tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_demo_app.py -v`
-Expected: 8 passed.
+Expected: 9 passed.
 
 - [ ] **Step 10: Commit**
 
@@ -379,11 +406,10 @@ def test_predictor(trained):
     assert pred.run_names == {"image": "image", "text": "text_strict", "fusion": "xattn_strict"}
     img = Image.new("RGB", (40, 30), (200, 150, 60))
     both = pred.predict(img, "Best apple pie recipe from grandma")
-    assert set(both) == {"image", "text", "fusion", "masked_text", "top3_fusion"}
+    assert set(both) == {"image", "text", "fusion", "masked_text"}
     assert len(both["fusion"]) == 3 and abs(sum(both["fusion"].values()) - 1.0) < 1e-4
     assert "apple" not in both["masked_text"] and "[MASK]" in both["masked_text"]
     assert all(" " in k or k.isalpha() for k in both["image"])  # display names, no underscores
-    assert both["top3_fusion"][0][0] in ("apple_pie", "caesar_salad", "french_fries")
     image_only = pred.predict(img, "   ")
     assert image_only["text"] is None and image_only["fusion"] is not None and image_only["masked_text"] == ""
     text_only = pred.predict(None, "crispy fries")
@@ -492,13 +518,11 @@ class DemoPredictor:
                  for k, v in {"img": img, "img_tok": img_tok, "txt": txt, "txt_tok": txt_tok, "txt_mask": txt_mask}.items()}
         fusion_batch = drop_modalities(batch, torch.tensor([image is None]), torch.tensor([not text]))
         p_fusion = self._probs("fusion", fusion_batch)
-        top3 = np.argsort(-p_fusion)[:3]
         return {
             "image": self._labels(self._probs("image", batch)) if image is not None else None,
             "text": self._labels(self._probs("text", batch)) if text else None,
             "fusion": self._labels(p_fusion),
             "masked_text": masked,
-            "top3_fusion": [(self.classes[int(i)], float(p_fusion[i])) for i in top3],
         }
 ```
 
@@ -551,7 +575,7 @@ def build_examples(cfg: dict, predictor, vlm=None, n: int | None = None) -> list
         items.append({"name": f"{k}. {class_to_phrase(row['label'])}", "id": sid, "label": row["label"],
                       "image": rel, "text": text,
                       "pred": {key: pred[key] for key in ("image", "text", "fusion", "masked_text")},
-                      "vlm": vlm.extract(img, pred["top3_fusion"]) if vlm is not None else None})
+                      "vlm": vlm.extract(img, pred["masked_text"]) if vlm is not None else None})
         print(f"example {k}/{len(ids)}: {row['label']}", flush=True)
     save_json(items, out / "examples.json")
     return items
@@ -667,7 +691,7 @@ if __name__ == "__main__":
 - [ ] **Step 7: Run tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_demo_predictor.py tests/test_demo_app.py -v`
-Expected: 12 passed.
+Expected: 13 passed.
 
 - [ ] **Step 8: Commit**
 

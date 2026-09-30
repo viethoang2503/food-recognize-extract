@@ -2,7 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Extract frozen CLIP ViT-B/16 features once (pooled + 16 tokens per modality, clean and corrupted), train light fusion heads (image, text, late, concat, gated, cross-attention) on them, and produce the main / missing-modality / robustness / data-fraction tables, plots and t-SNE.
+**Goal:** Extract frozen CLIP ViT-B/16 features once (pooled + 16 tokens per modality), train light fusion heads (image, text, late, concat, gated, cross-attention) on them for the `none` and `strict` text masks, and produce the main table, the missing-modality table (from the main runs) and t-SNE, with bootstrap confidence intervals and McNemar tests for the key image / text / fusion comparisons.
+
+**Scope reduction (2026-09-28):** the corruption (robustness), data-fraction and modality-dropout (`md0`, `md0.3`) ablations and the `exact` mask are no longer run. Tasks 1–6 are unchanged: the corruption code already exists, is simply not extracted, and `evaluate_robust` skips conditions whose features are missing. Tasks 7–10 below are the reduced versions.
 
 **Architecture:** New sub-package `src/foodmm/clip/` (corrupt, features, encoder, zero_shot, heads, train_heads, report) plus thin scripts. Features are stored as `.npy` directories under `work_dir/clip/features/<tag>/`, runs under `work_dir/clip/runs/`, results under `work_dir/clip/results/`. Reuses Milestone 1 config, manifest, text masking, metrics, late-fusion math and the LR scheduler. Notebooks 02–04 share `tools/nb_utils.py`.
 
@@ -26,17 +28,19 @@
 
 | File | Responsibility |
 |---|---|
-| `configs/default.yaml` (append) | `clip`, `head`, `clip_suite` sections |
+| `configs/default.yaml` (append; `clip_suite` trimmed in Task 7) | `clip`, `head`, `clip_suite`, `stats` sections |
 | `src/foodmm/clip/corrupt.py` | per-sample seeds, blur / noise / word drop, corruption specs |
 | `src/foodmm/clip/features.py` | paths, feature-set names, sharded writer, loader |
 | `src/foodmm/clip/encoder.py` | `chunk_pool`, `ClipEncoder` |
 | `src/foodmm/clip/zero_shot.py` | prompts, zero-shot logits, `run_zero_shot` |
 | `src/foodmm/clip/heads.py` | modality dropping, 5 heads, `build_head` |
 | `src/foodmm/clip/train_heads.py` | `FeatureBank`, loading, run names, fit / predict, robustness, late fusion, `train_head_run` |
-| `src/foodmm/clip/report.py` | result collection, tables, plots, t-SNE |
+| `src/foodmm/stats.py` | bootstrap CI, McNemar test, paired run comparison (shared with the VLM sub-project) |
+| `src/foodmm/clip/suite.py` | the list of main runs |
+| `src/foodmm/clip/report.py` | result collection, main / missing tables, CIs, significance table, t-SNE |
 | `scripts/extract_clip.py`, `zero_shot_clip.py`, `train_head.py`, `run_clip_suite.py`, `summarize_clip.py` | CLI |
 | `tools/nb_utils.py`, `tools/build_notebook_m2.py`, `notebooks/02_milestone2.ipynb` | notebook |
-| `tests/helpers.py` (append), `tests/test_clip_*.py`, `tests/test_notebooks.py` | tests |
+| `tests/helpers.py` (append), `tests/test_clip_*.py`, `tests/test_stats.py`, `tests/test_notebooks.py` | tests |
 
 ---
 
@@ -1437,7 +1441,7 @@ def load_bank(cfg: dict, df: pd.DataFrame, split: str, head: str, text_mask: str
               image_corruption: str | None = None, text_corruption: str | None = None) -> FeatureBank:
     use_img, use_txt, use_tok = head_inputs(head)
     sub = df[df["split"] == split]
-    ids, labels = sub["id"].astype(str).to_numpy(), sub["label_idx"].to_numpy()
+    ids, labels = sub["id"].to_numpy().astype(str), sub["label_idx"].to_numpy()  # str array: np.load needs no pickle
     root = clip_paths(cfg)["features"]
     arrays: dict = {}
     if use_img:
@@ -1706,13 +1710,26 @@ git commit -m "feat(clip): head training, robustness evaluation and late fusion 
 ### Task 7: Run scripts and the experiment suite
 
 **Files:**
+- Modify: `configs/default.yaml` (`clip_suite` section), `tests/helpers.py` (`clip_smoke_overrides`)
 - Create: `src/foodmm/clip/suite.py`, `scripts/train_head.py`, `scripts/run_clip_suite.py`
 - Test: `tests/test_clip_suite.py`
 
 **Interfaces:**
 - Consumes: `train_head_run`, `run_late` (Task 6), `run_zero_shot` (Task 4), `set_by_path`, `parse_value` (M1).
-- Produces: `STAGES = ("main", "missing", "frac", "all")`, `suite_jobs(cfg, stage) -> list[tuple[kind, overrides]]` (`kind` in `zeroshot|head|late`), `job_config(cfg, overrides) -> dict`, `run_suite(cfg, stage, force=False, skip_zeroshot=False) -> pandas.DataFrame[kind, run, acc]`.
-- CLI: `train_head.py --head {image,text,concat,gated,xattn,late} [--force] --set ...`; `run_clip_suite.py --stage {main,missing,frac,all} [--skip_zeroshot] [--force] --set ...` (prints the final table).
+- Produces: `suite_jobs(cfg) -> list[tuple[kind, overrides]]` (`kind` in `zeroshot|head|late`; 12 jobs with the default config), `job_config(cfg, overrides) -> dict`, `run_suite(cfg, force=False, skip_zeroshot=False) -> pandas.DataFrame[kind, run, acc]`.
+- CLI: `train_head.py --head {image,text,concat,gated,xattn,late} [--force] --set ...` (also used for any extra run by hand, e.g. `--set head.modality_dropout=0.3`); `run_clip_suite.py [--skip_zeroshot] [--force] --set ...` (prints the final table).
+
+- [ ] **Step 0: Trim the `clip_suite` section**
+
+In `configs/default.yaml`, replace the `clip_suite` section with:
+
+```yaml
+clip_suite:
+  masks: [none, strict]
+  fusion_heads: [concat, gated, xattn]
+```
+
+In `tests/helpers.py`, remove the three overrides `"clip_suite.missing_md=[0.3]"`, `"clip_suite.frac_heads=[image,xattn]"` and `"clip_suite.fracs=[0.5]"` from `clip_smoke_overrides` (the keys no longer exist).
 
 - [ ] **Step 1: Write the failing test `tests/test_clip_suite.py`**
 
@@ -1726,28 +1743,25 @@ from helpers import run_script
 from test_clip_train import env  # noqa: F401  (fixture with a fake feature store)
 
 
-def test_suite_jobs_default_counts():
+def test_suite_jobs_default():
     cfg = load_config()
-    assert len(suite_jobs(cfg, "main")) == 17
-    assert len(suite_jobs(cfg, "missing")) == 6
-    assert len(suite_jobs(cfg, "frac")) == 12
-    assert len(suite_jobs(cfg, "all")) == 35
-    assert suite_jobs(cfg, "main")[0] == ("zeroshot", [])
-    kind, ov = suite_jobs(cfg, "missing")[0]
+    jobs = suite_jobs(cfg)
+    assert len(jobs) == 12 and jobs[0] == ("zeroshot", [])
+    assert [k for k, _ in jobs].count("late") == 2
+    kind, ov = jobs[4]
     c = job_config(cfg, ov)
-    assert kind == "head" and c["head"]["name"] == "concat" and c["head"]["modality_dropout"] == 0.0
-    assert c["data"]["text_mask"] == "strict" and cfg["head"]["modality_dropout"] == 0.1  # base untouched
+    assert kind == "head" and c["head"]["name"] == "concat" and c["data"]["text_mask"] == "none"
+    c = job_config(cfg, ["head.modality_dropout=0.3"])
+    assert c["head"]["modality_dropout"] == 0.3 and cfg["head"]["modality_dropout"] == 0.1  # base untouched
 
 
 def test_run_suite_on_fake_features(env):  # noqa: F811
     cfg = job_config(env, ["head.epochs=2"])
-    table = run_suite(cfg, "all", skip_zeroshot=True)
-    runs = set(table["run"])
-    assert {"image", "text_none", "text_strict", "concat_none", "gated_strict", "xattn_strict",
-            "late_none", "late_strict", "xattn_strict_md0.3", "image_frac0.5", "xattn_strict_frac0.5"} <= runs
-    assert len(table) == 16  # 11 main (zero-shot skipped) + 3 missing + 2 fraction runs
-    rob = json.loads((clip_paths(cfg)["runs"] / "gated_strict_md0.3" / "metrics_robust.json").read_text())
-    assert rob[0]["condition"] == "full"
+    table = run_suite(cfg, skip_zeroshot=True)
+    assert set(table["run"]) == {"image", "text_none", "text_strict", "concat_none", "concat_strict", "gated_none",
+                                 "gated_strict", "xattn_none", "xattn_strict", "late_none", "late_strict"}
+    rob = json.loads((clip_paths(cfg)["runs"] / "gated_strict" / "metrics_robust.json").read_text())
+    assert [r["condition"] for r in rob][:3] == ["full", "no_image", "no_text"]
 
 
 def test_train_head_script(env, tmp_path):  # noqa: F811
@@ -1770,7 +1784,7 @@ Expected: ERROR `ModuleNotFoundError: No module named 'foodmm.clip.suite'`.
 - [ ] **Step 3: Implement `src/foodmm/clip/suite.py`**
 
 ```python
-"""The Milestone 2 experiment list: main runs, missing-modality and data-fraction ablations."""
+"""The Milestone 2 experiment list: zero-shot, image, text, fusion heads and late fusion per text mask."""
 from __future__ import annotations
 
 import copy
@@ -1781,26 +1795,13 @@ from ..config import parse_value, set_by_path
 from .train_heads import run_late, train_head_run
 from .zero_shot import run_zero_shot
 
-STAGES = ("main", "missing", "frac", "all")
 
-
-def suite_jobs(cfg: dict, stage: str) -> list[tuple[str, list[str]]]:
-    if stage not in STAGES:
-        raise ValueError(f"unknown stage {stage!r}; expected one of {STAGES}")
-    s, main = cfg["clip_suite"], cfg["clip"]["main_mask"]
-    jobs: list[tuple[str, list[str]]] = []
-    if stage in ("main", "all"):
-        jobs.append(("zeroshot", []))
-        jobs.append(("head", ["head.name=image"]))
-        jobs += [("head", ["head.name=text", f"data.text_mask={m}"]) for m in s["masks"]]
-        jobs += [("head", [f"head.name={h}", f"data.text_mask={m}"]) for m in s["masks"] for h in s["fusion_heads"]]
-        jobs += [("late", [f"data.text_mask={m}"]) for m in s["masks"]]
-    if stage in ("missing", "all"):
-        jobs += [("head", [f"head.name={h}", f"data.text_mask={main}", f"head.modality_dropout={md}"])
-                 for h in s["fusion_heads"] for md in s["missing_md"]]
-    if stage in ("frac", "all"):
-        jobs += [("head", [f"head.name={h}", f"data.text_mask={main}", f"head.train_frac={f}"])
-                 for h in s["frac_heads"] for f in s["fracs"]]
+def suite_jobs(cfg: dict) -> list[tuple[str, list[str]]]:
+    s = cfg["clip_suite"]
+    jobs: list[tuple[str, list[str]]] = [("zeroshot", []), ("head", ["head.name=image"])]
+    jobs += [("head", ["head.name=text", f"data.text_mask={m}"]) for m in s["masks"]]
+    jobs += [("head", [f"head.name={h}", f"data.text_mask={m}"]) for m in s["masks"] for h in s["fusion_heads"]]
+    jobs += [("late", [f"data.text_mask={m}"]) for m in s["masks"]]
     return jobs
 
 
@@ -1812,9 +1813,9 @@ def job_config(cfg: dict, overrides: list[str]) -> dict:
     return c
 
 
-def run_suite(cfg: dict, stage: str, force: bool = False, skip_zeroshot: bool = False) -> pd.DataFrame:
+def run_suite(cfg: dict, force: bool = False, skip_zeroshot: bool = False) -> pd.DataFrame:
     rows = []
-    jobs = suite_jobs(cfg, stage)
+    jobs = suite_jobs(cfg)
     for i, (kind, overrides) in enumerate(jobs, 1):
         c = job_config(cfg, overrides)
         print(f"[{i}/{len(jobs)}] {kind} {' '.join(overrides)}", flush=True)
@@ -1873,7 +1874,7 @@ if __name__ == "__main__":
 
 ```python
 #!/usr/bin/env python
-"""Run every Milestone 2 experiment of a stage; finished runs are skipped."""
+"""Run every Milestone 2 main run; finished runs are skipped."""
 from __future__ import annotations
 
 import argparse
@@ -1882,18 +1883,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from foodmm.clip.suite import STAGES, run_suite  # noqa: E402
+from foodmm.clip.suite import run_suite  # noqa: E402
 from foodmm.config import add_config_args, config_from_args  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--stage", default="all", choices=STAGES)
     parser.add_argument("--skip_zeroshot", action="store_true")
-    parser.add_argument("--force", action="store_true", help="retrain every run of the stage")
+    parser.add_argument("--force", action="store_true", help="retrain every run")
     add_config_args(parser)
     args = parser.parse_args(argv)
-    table = run_suite(config_from_args(args), args.stage, force=args.force, skip_zeroshot=args.skip_zeroshot)
+    table = run_suite(config_from_args(args), force=args.force, skip_zeroshot=args.skip_zeroshot)
     print(table.to_string(index=False))
     return 0
 
@@ -1910,13 +1910,13 @@ Expected: 3 passed.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/foodmm/clip/suite.py scripts/train_head.py scripts/run_clip_suite.py tests/test_clip_suite.py
+git add configs/default.yaml tests/helpers.py src/foodmm/clip/suite.py scripts/train_head.py scripts/run_clip_suite.py tests/test_clip_suite.py
 git commit -m "feat(clip): experiment suite and head training scripts"
 ```
 
 ---
 
-### Task 8: Report tables, plots and `summarize_clip.py`
+### Task 8: Report tables, t-SNE and `summarize_clip.py`
 
 **Files:**
 - Create: `src/foodmm/clip/report.py`, `scripts/summarize_clip.py`
@@ -1924,8 +1924,8 @@ git commit -m "feat(clip): experiment suite and head training scripts"
 
 **Interfaces:**
 - Consumes: `MASK_ORDER` (M1 analysis), `load_json`, `clip_paths`.
-- Produces: `HEAD_ORDER`, `CLIP_COLUMNS = ["run", "head", "text_mask", "modality_dropout", "train_frac", "acc", "top5", "macro_f1", "n"]`, `collect_clip_results(runs_dir) -> DataFrame`, `main_table(df, default_md) -> DataFrame`, `collect_robust(runs_dir) -> DataFrame[run, head, text_mask, modality_dropout, train_frac, condition, acc, top5, macro_f1]`, `missing_table(robust, mask) -> DataFrame[run, head, modality_dropout, full, no_image, no_text]`, `robustness_table(robust, mask, default_md) -> DataFrame[run, head, kind, level, acc]`, `fraction_table(df, mask, default_md) -> DataFrame[head, train_frac, acc, run]`, `table_to_markdown(df, pct_cols) -> str`, `plot_robustness(table)`, `plot_fraction(table)`, `sample_for_tsne(labels, n_classes=20, per_class=50, seed=0) -> ndarray`, `tsne_2d(x, seed=0, perplexity=30.0) -> ndarray`, `plot_tsne(emb, labels, classes, title="")`.
-- CLI: `summarize_clip.py --set ...` → `clip/results/{main,missing,robust,frac}.csv`, `main.md`, `missing.md`, `robust.png`, `frac.png`; exits non-zero with `No finished runs` when empty.
+- Produces: `HEAD_ORDER`, `CLIP_COLUMNS = ["run", "head", "text_mask", "modality_dropout", "train_frac", "acc", "top5", "macro_f1", "n"]`, `collect_clip_results(runs_dir) -> DataFrame`, `main_table(df, default_md) -> DataFrame` (drops runs with a non-default modality dropout or `train_frac < 1`, e.g. extra runs made by hand), `collect_robust(runs_dir) -> DataFrame[run, head, text_mask, modality_dropout, train_frac, condition, acc, top5, macro_f1]`, `missing_table(robust, mask) -> DataFrame[run, head, modality_dropout, full, no_image, no_text]`, `table_to_markdown(df, pct_cols) -> str`, `sample_for_tsne(labels, n_classes=20, per_class=50, seed=0) -> ndarray`, `tsne_2d(x, seed=0, perplexity=30.0) -> ndarray`, `plot_tsne(emb, labels, classes, title="")`.
+- CLI: `summarize_clip.py --set ...` → `clip/results/{main,missing}.csv`, `main.md`, `missing.md`; exits non-zero with `No finished runs` when empty.
 
 - [ ] **Step 1: Write the failing test `tests/test_clip_report.py`**
 
@@ -1939,8 +1939,8 @@ import numpy as np  # noqa: E402
 from matplotlib.figure import Figure  # noqa: E402
 
 from foodmm.clip.report import (  # noqa: E402
-    collect_clip_results, collect_robust, fraction_table, main_table, missing_table, plot_fraction,
-    plot_robustness, plot_tsne, robustness_table, sample_for_tsne, table_to_markdown, tsne_2d,
+    collect_clip_results, collect_robust, main_table, missing_table, plot_tsne, sample_for_tsne, table_to_markdown,
+    tsne_2d,
 )
 from foodmm.utils import save_json  # noqa: E402
 from helpers import run_script  # noqa: E402
@@ -1959,9 +1959,9 @@ def _write(runs_dir):
                    "train_frac": frac, "acc": acc, "top5": 0.9, "macro_f1": acc, "n": 10}, runs_dir / run / "metrics_test.json")
         if head == "zeroshot":
             continue
-        conds = [("full", acc), ("blur2", acc - 0.1), ("noise0.1", acc - 0.2)]
+        conds = [("full", acc)]
         if head in ("xattn", "late"):
-            conds += [("no_image", 0.3), ("no_text", acc - 0.05), ("drop0.5", acc - 0.05)]
+            conds += [("no_image", 0.3), ("no_text", acc - 0.05)]
         save_json([{"condition": c, "acc": a, "top5": 0.9, "macro_f1": a, "n": 10} for c, a in conds],
                   runs_dir / run / "metrics_robust.json")
 
@@ -1972,34 +1972,21 @@ def test_tables(tmp_path):
     assert df["run"].tolist()[:4] == ["zeroshot", "image", "image_frac0.5", "text_strict"]
     main = main_table(df, 0.1)
     assert main["run"].tolist() == ["zeroshot", "image", "text_strict", "late_strict", "xattn_strict"]
-    rob = collect_robust(tmp_path)
-    miss = missing_table(rob, "strict")
+    miss = missing_table(collect_robust(tmp_path), "strict")
     assert miss["run"].tolist() == ["late_strict", "xattn_strict", "xattn_strict_md0.3"]
     assert miss.set_index("run").loc["xattn_strict", "no_image"] == 0.3
-    rt = robustness_table(rob, "strict", 0.1)
-    blur = rt[(rt["run"] == "image") & (rt["kind"] == "blur")].sort_values("level")
-    assert blur["level"].tolist() == [0.0, 2.0] and blur["acc"].round(2).tolist() == [0.6, 0.5]
-    assert set(rt["run"]) == {"image", "text_strict", "late_strict", "xattn_strict"}
-    fr = fraction_table(df, "strict", 0.1)
-    assert fr[fr["head"] == "xattn"]["train_frac"].tolist() == [0.5, 1.0]
-    assert set(fr["head"]) == {"image", "xattn"}
     md = table_to_markdown(main, ["acc", "top5", "macro_f1"])
     assert md.splitlines()[0].startswith("| run |") and "| 70.00 |" in md
 
 
-def test_plots_and_tsne():
+def test_tsne():
     rng = np.random.default_rng(0)
     labels = np.repeat(np.arange(25), 8)
     idx = sample_for_tsne(labels, n_classes=20, per_class=5, seed=0)
     assert len(idx) == 100 and len(np.unique(labels[idx])) == 20
     emb = tsne_2d(rng.normal(size=(len(idx), 6)), seed=0)
     assert emb.shape == (100, 2)
-    import pandas as pd
-
-    rob = pd.DataFrame({"run": ["a", "a"], "head": ["image"] * 2, "kind": ["blur"] * 2, "level": [0.0, 2.0], "acc": [0.6, 0.5]})
-    fr = pd.DataFrame({"head": ["image", "image"], "train_frac": [0.5, 1.0], "acc": [0.5, 0.6], "run": ["x", "y"]})
-    figs = [plot_robustness(rob), plot_fraction(fr), plot_tsne(emb, labels[idx], [f"c{i}" for i in range(25)], "t")]
-    assert all(isinstance(f, Figure) for f in figs)
+    assert isinstance(plot_tsne(emb, labels[idx], [f"c{i}" for i in range(25)], "t"), Figure)
     plt.close("all")
 
 
@@ -2010,7 +1997,7 @@ def test_summarize_clip_script(tmp_path):
     _write(work / "clip" / "runs")
     run_script("summarize_clip.py", "--set", f"paths.work_dir={work}")
     out = work / "clip" / "results"
-    for name in ("main.csv", "main.md", "missing.csv", "missing.md", "robust.csv", "robust.png", "frac.csv", "frac.png"):
+    for name in ("main.csv", "main.md", "missing.csv", "missing.md"):
         assert (out / name).exists(), name
 ```
 
@@ -2022,10 +2009,9 @@ Expected: ERROR `ModuleNotFoundError: No module named 'foodmm.clip.report'`.
 - [ ] **Step 3: Implement `src/foodmm/clip/report.py` (part 1: tables)**
 
 ```python
-"""Milestone 2 result tables, plots and t-SNE helpers."""
+"""Milestone 2 result tables and t-SNE helpers."""
 from __future__ import annotations
 
-import re
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -2037,7 +2023,6 @@ from ..utils import load_json
 
 HEAD_ORDER = {"zeroshot": 0, "image": 1, "text": 2, "late": 3, "concat": 4, "gated": 5, "xattn": 6}
 CLIP_COLUMNS = ["run", "head", "text_mask", "modality_dropout", "train_frac", "acc", "top5", "macro_f1", "n"]
-_COND = re.compile(r"^(blur|noise|drop)([\d.]+)$")
 
 
 def _sort(df: pd.DataFrame) -> pd.DataFrame:
@@ -2096,33 +2081,6 @@ def missing_table(robust: pd.DataFrame, mask: str) -> pd.DataFrame:
     return out.reindex(columns=["run", "head", "modality_dropout", "full", "no_image", "no_text"])
 
 
-def robustness_table(robust: pd.DataFrame, mask: str, default_md: float) -> pd.DataFrame:
-    sub = robust[robust["text_mask"].isin([mask, "-"]) & np.isclose(pd.to_numeric(robust["train_frac"]), 1.0)
-                 & _default_md(robust, default_md)]
-    rows = []
-    for run, g in sub.groupby("run", sort=False):
-        full = g.loc[g["condition"] == "full", "acc"]
-        kinds = {}
-        for r in g.itertuples(index=False):
-            m = _COND.match(r.condition)
-            if m:
-                kinds.setdefault(m.group(1), []).append((float(m.group(2)), r.acc))
-        for kind, points in kinds.items():
-            if len(full):
-                points = [(0.0, float(full.iloc[0]))] + points
-            rows += [{"run": run, "head": g["head"].iloc[0], "kind": kind, "level": lv, "acc": a} for lv, a in points]
-    return pd.DataFrame(rows, columns=["run", "head", "kind", "level", "acc"])
-
-
-def fraction_table(df: pd.DataFrame, mask: str, default_md: float) -> pd.DataFrame:
-    frac = pd.to_numeric(df["train_frac"])
-    heads = set(df.loc[frac < 1.0, "head"])
-    sub = df[df["head"].isin(heads) & df["text_mask"].isin([mask, "-"]) & _default_md(df, default_md)]
-    out = sub[["head", "train_frac", "acc", "run"]].copy()
-    out["_h"] = out["head"].map(HEAD_ORDER)
-    return out.sort_values(["_h", "train_frac"]).drop(columns="_h").reset_index(drop=True)
-
-
 def table_to_markdown(df: pd.DataFrame, pct_cols: Sequence[str]) -> str:
     cols = list(df.columns)
     lines = ["| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
@@ -2140,45 +2098,9 @@ def table_to_markdown(df: pd.DataFrame, pct_cols: Sequence[str]) -> str:
     return "\n".join(lines)
 ```
 
-- [ ] **Step 4: Append to `src/foodmm/clip/report.py` (part 2: plots and t-SNE)**
+- [ ] **Step 4: Append to `src/foodmm/clip/report.py` (part 2: t-SNE)**
 
 ```python
-def plot_robustness(table: pd.DataFrame):
-    import matplotlib.pyplot as plt
-
-    kinds = [k for k in ("blur", "noise", "drop") if k in set(table["kind"])] or ["blur"]
-    titles = {"blur": "Ảnh bị làm mờ (bán kính)", "noise": "Ảnh thêm nhiễu (độ lệch chuẩn)",
-              "drop": "Text bị bỏ từ (tỷ lệ)"}
-    fig, axes = plt.subplots(1, len(kinds), figsize=(5 * len(kinds), 4), squeeze=False)
-    for ax, kind in zip(axes[0], kinds):
-        for run, g in table[table["kind"] == kind].groupby("run", sort=False):
-            g = g.sort_values("level")
-            ax.plot(g["level"], g["acc"] * 100, marker="o", label=run)
-        ax.set_title(titles[kind])
-        ax.set_xlabel("mức nhiễu (0 = sạch)")
-        ax.set_ylabel("test acc (%)")
-        ax.grid(alpha=0.3)
-        ax.legend(fontsize=7)
-    fig.tight_layout()
-    return fig
-
-
-def plot_fraction(table: pd.DataFrame):
-    import matplotlib.pyplot as plt
-
-    fig, ax = plt.subplots(figsize=(6, 4))
-    for head, g in table.groupby("head", sort=False):
-        ax.plot(g["train_frac"] * 100, g["acc"] * 100, marker="o", label=head)
-    ax.set_xscale("log")
-    ax.set_xlabel("dữ liệu train (%)")
-    ax.set_ylabel("test acc (%)")
-    ax.set_title("Accuracy theo lượng dữ liệu train")
-    ax.grid(alpha=0.3)
-    ax.legend()
-    fig.tight_layout()
-    return fig
-
-
 def sample_for_tsne(labels: np.ndarray, n_classes: int = 20, per_class: int = 50, seed: int = 0) -> np.ndarray:
     rng = np.random.default_rng(seed)
     classes = np.unique(labels)
@@ -2220,7 +2142,7 @@ def plot_tsne(emb: np.ndarray, labels: np.ndarray, classes: Sequence[str], title
 
 ```python
 #!/usr/bin/env python
-"""Write the Milestone 2 tables and plots into work_dir/clip/results."""
+"""Write the Milestone 2 tables into work_dir/clip/results."""
 from __future__ import annotations
 
 import argparse
@@ -2229,15 +2151,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-import matplotlib  # noqa: E402
-
-matplotlib.use("Agg")
-
 from foodmm.clip.features import clip_paths  # noqa: E402
-from foodmm.clip.report import (  # noqa: E402
-    collect_clip_results, collect_robust, fraction_table, main_table, missing_table, plot_fraction,
-    plot_robustness, robustness_table, table_to_markdown,
-)
+from foodmm.clip.report import collect_clip_results, collect_robust, main_table, missing_table, table_to_markdown  # noqa: E402
 from foodmm.config import add_config_args, config_from_args  # noqa: E402
 from foodmm.utils import ensure_dir  # noqa: E402
 
@@ -2255,17 +2170,12 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"No finished runs found in {cp['runs']}")
     out = ensure_dir(cp["results"])
     mask, md = cfg["clip"]["main_mask"], float(cfg["head"]["default_modality_dropout"])
-    robust = collect_robust(cp["runs"])
-    tables = {"main": main_table(df, md), "missing": missing_table(robust, mask),
-              "robust": robustness_table(robust, mask, md), "frac": fraction_table(df, mask, md)}
+    tables = {"main": main_table(df, md), "missing": missing_table(collect_robust(cp["runs"]), mask)}
     for name, table in tables.items():
         table.to_csv(out / f"{name}.csv", index=False)
-    for name in ("main", "missing"):
-        md_text = table_to_markdown(tables[name], PCT)
+        md_text = table_to_markdown(table, PCT)
         (out / f"{name}.md").write_text(md_text + "\n", encoding="utf-8")
         print(f"\n## {name}\n{md_text}")
-    plot_robustness(tables["robust"]).savefig(out / "robust.png", dpi=150)
-    plot_fraction(tables["frac"]).savefig(out / "frac.png", dpi=150)
     print(f"\nWrote results to {out}")
     return 0
 
@@ -2283,7 +2193,314 @@ Expected: 3 passed.
 
 ```bash
 git add src/foodmm/clip/report.py scripts/summarize_clip.py tests/test_clip_report.py
-git commit -m "feat(clip): result tables, robustness/fraction plots and t-SNE helpers"
+git commit -m "feat(clip): result tables and t-SNE helpers"
+```
+
+---
+
+### Task 8b: Confidence intervals and paired significance tests
+
+**Files:**
+- Modify: `configs/default.yaml` (append `stats`), `src/foodmm/clip/report.py` (append), `scripts/summarize_clip.py` (replace)
+- Create: `src/foodmm/stats.py`
+- Test: `tests/test_stats.py`, `tests/test_clip_report.py` (append)
+
+**Interfaces:**
+- Consumes: `load_preds` (M1), `collect_clip_results`, `main_table`, `table_to_markdown` (Task 8).
+- Produces (`foodmm/stats.py`, shared with the VLM sub-project): `correct_vector(preds) -> bool[N]`, `bootstrap_ci(values, n_boot=1000, alpha=0.05, seed=0) -> (lo, hi)` (percentile CI of the mean; NaN pair when empty), `mcnemar(a, b) -> (only_b, only_a, p)` (exact two-sided binomial when discordant ≤ 50, else χ² with continuity correction), `aligned_correct(dir_a, dir_b, split="test") -> (a, b)` (joined on common ids), `compare_runs(dir_a, dir_b, n_boot, alpha, seed) -> dict[n, acc_a, acc_b, diff, diff_lo, diff_hi, only_a_correct, only_b_correct, mcnemar_p]` (`diff = acc_b − acc_a`, paired bootstrap).
+- Produces (`report`): `SIG_COLUMNS`, `add_acc_ci(table, runs_dir, n_boot, alpha, seed) -> DataFrame` (adds `acc_lo`, `acc_hi`; NaN when a run has no `preds_test.npz`), `significance_table(work_dir, pairs, n_boot, alpha, seed) -> DataFrame[SIG_COLUMNS]` (pairs whose predictions are missing are skipped with a printed note).
+- CLI: `summarize_clip.py` also writes `significance.csv` / `significance.md`, and `main.*` gains `acc_lo`, `acc_hi`.
+- Pairs are run directories relative to `paths.work_dir`, so Milestone 1 runs (`runs/...`) and Milestone 2 runs (`clip/runs/...`) can be compared as long as they share test ids.
+
+- [ ] **Step 1: Append to `configs/default.yaml`**
+
+```yaml
+
+stats:
+  n_boot: 1000
+  alpha: 0.05
+  pairs:                   # [a, b] run dirs relative to paths.work_dir; diff = acc(b) - acc(a)
+    - [clip/runs/image, clip/runs/text_strict]
+    - [clip/runs/image, clip/runs/xattn_strict]
+    - [clip/runs/text_strict, clip/runs/xattn_strict]
+    - [clip/runs/late_strict, clip/runs/xattn_strict]
+    - [clip/runs/concat_strict, clip/runs/xattn_strict]
+    - [clip/runs/gated_strict, clip/runs/xattn_strict]
+    - [clip/runs/zeroshot, clip/runs/image]
+    - [runs/image, runs/early_strict]
+    - [runs/text_strict, runs/early_strict]
+    - [runs/late_strict, runs/early_strict]
+    - [runs/early_strict, clip/runs/xattn_strict]
+```
+
+- [ ] **Step 2: Write the failing test `tests/test_stats.py`**
+
+```python
+import math
+
+import numpy as np
+import pytest
+
+from foodmm.stats import aligned_correct, bootstrap_ci, compare_runs, correct_vector, mcnemar
+
+
+def _save(run_dir, ids, labels, preds):
+    run_dir.mkdir(parents=True)
+    logits = np.zeros((len(ids), 3), dtype=np.float32)
+    logits[np.arange(len(ids)), preds] = 1.0
+    np.savez(run_dir / "preds_test.npz", logits=logits, labels=np.asarray(labels), ids=np.asarray(ids))
+
+
+def test_correct_vector():
+    preds = {"logits": np.array([[2.0, 0.0], [0.0, 1.0], [3.0, 1.0]]), "labels": np.array([0, 0, 0])}
+    assert correct_vector(preds).tolist() == [True, False, True]
+
+
+def test_bootstrap_ci():
+    assert bootstrap_ci(np.ones(50), n_boot=100) == (1.0, 1.0)
+    lo, hi = bootstrap_ci(np.arange(1000) % 2, n_boot=500, seed=0)
+    assert lo < 0.5 < hi and hi - lo < 0.08
+    assert bootstrap_ci(np.arange(1000) % 2, n_boot=500, seed=0) == (lo, hi)  # deterministic
+    assert all(math.isnan(x) for x in bootstrap_ci(np.array([])))
+
+
+def test_mcnemar():
+    a = np.array([1, 1, 0, 0], dtype=bool)
+    b = np.array([1, 0, 1, 1], dtype=bool)
+    assert mcnemar(a, b) == (2, 1, 1.0)
+    only_b = np.zeros(10, dtype=bool), np.ones(10, dtype=bool)
+    assert mcnemar(*only_b) == (10, 0, pytest.approx(2 / 1024))
+    a = np.array([False] * 60 + [True] * 30 + [True] * 100)
+    b = np.array([True] * 60 + [False] * 30 + [True] * 100)
+    n01, n10, p = mcnemar(a, b)
+    assert (n01, n10) == (60, 30) and p == pytest.approx(math.erfc(math.sqrt((29 ** 2 / 90) / 2)))
+    assert mcnemar(a, a)[2] == 1.0
+
+
+def test_compare_runs_aligns_on_ids(tmp_path):
+    _save(tmp_path / "a", ["x", "y", "z", "w"], [0, 1, 2, 0], [0, 0, 0, 0])      # correct: x, w
+    _save(tmp_path / "b", ["w", "z", "y", "q"], [0, 2, 1, 1], [0, 2, 1, 0])      # correct: w, z, y (q not in a)
+    a, b = aligned_correct(tmp_path / "a", tmp_path / "b")
+    assert len(a) == 3 and a.sum() == 1 and b.sum() == 3  # common ids: w, y, z
+    res = compare_runs(tmp_path / "a", tmp_path / "b", n_boot=200, seed=0)
+    assert res["n"] == 3 and res["diff"] == pytest.approx(2 / 3)
+    assert res["only_b_correct"] == 2 and res["only_a_correct"] == 0
+    assert res["diff_lo"] <= res["diff"] <= res["diff_hi"] and 0 < res["mcnemar_p"] <= 1
+    _save(tmp_path / "c", ["other"], [0], [0])
+    with pytest.raises(ValueError, match="no test ids in common"):
+        aligned_correct(tmp_path / "a", tmp_path / "c")
+```
+
+- [ ] **Step 3: Run test to verify it fails**
+
+Run: `.venv/bin/pytest tests/test_stats.py -v`
+Expected: ERROR `ModuleNotFoundError: No module named 'foodmm.stats'`.
+
+- [ ] **Step 4: Implement `src/foodmm/stats.py`**
+
+```python
+"""Uncertainty (bootstrap CI) and paired significance tests (McNemar) on per-sample correctness."""
+from __future__ import annotations
+
+import math
+from pathlib import Path
+
+import numpy as np
+
+from .late_fusion import load_preds
+
+_EXACT_MAX = 50  # discordant pairs up to this count use the exact binomial test
+
+
+def correct_vector(preds: dict) -> np.ndarray:
+    return np.asarray(preds["logits"]).argmax(axis=1) == np.asarray(preds["labels"])
+
+
+def bootstrap_ci(values, n_boot: int = 1000, alpha: float = 0.05, seed: int = 0) -> tuple[float, float]:
+    """Percentile bootstrap CI of the mean of `values` (e.g. a 0/1 correctness vector)."""
+    x = np.asarray(values, dtype=np.float64)
+    if x.size == 0:
+        return float("nan"), float("nan")
+    rng = np.random.default_rng(seed)
+    means = np.array([x[rng.integers(0, x.size, x.size)].mean() for _ in range(int(n_boot))])
+    return float(np.quantile(means, alpha / 2)), float(np.quantile(means, 1 - alpha / 2))
+
+
+def mcnemar(a, b) -> tuple[int, int, float]:
+    """Two-sided McNemar test for paired correctness; returns (only_b_correct, only_a_correct, p)."""
+    a, b = np.asarray(a, dtype=bool), np.asarray(b, dtype=bool)
+    only_b, only_a = int(np.sum(~a & b)), int(np.sum(a & ~b))
+    n = only_b + only_a
+    if n == 0:
+        return only_b, only_a, 1.0
+    if n <= _EXACT_MAX:
+        k = min(only_b, only_a)
+        p = 2 * sum(math.comb(n, i) for i in range(k + 1)) / 2 ** n
+        return only_b, only_a, min(1.0, p)
+    chi2 = (abs(only_b - only_a) - 1) ** 2 / n
+    return only_b, only_a, math.erfc(math.sqrt(chi2 / 2))
+
+
+def aligned_correct(dir_a: str | Path, dir_b: str | Path, split: str = "test") -> tuple[np.ndarray, np.ndarray]:
+    ca, cb = ({str(i): bool(c) for i, c in zip(p["ids"], correct_vector(p))}
+              for p in (load_preds(dir_a, split), load_preds(dir_b, split)))
+    common = sorted(set(ca) & set(cb))
+    if not common:
+        raise ValueError(f"{dir_a} and {dir_b} have no test ids in common")
+    return np.array([ca[i] for i in common]), np.array([cb[i] for i in common])
+
+
+def compare_runs(dir_a: str | Path, dir_b: str | Path, n_boot: int = 1000, alpha: float = 0.05,
+                 seed: int = 0) -> dict:
+    a, b = aligned_correct(dir_a, dir_b)
+    d = b.astype(np.float64) - a.astype(np.float64)
+    lo, hi = bootstrap_ci(d, n_boot, alpha, seed)
+    only_b, only_a, p = mcnemar(a, b)
+    return {"n": int(len(a)), "acc_a": float(a.mean()), "acc_b": float(b.mean()), "diff": float(d.mean()),
+            "diff_lo": lo, "diff_hi": hi, "only_a_correct": only_a, "only_b_correct": only_b, "mcnemar_p": p}
+```
+
+- [ ] **Step 5: Run tests to verify they pass**
+
+Run: `.venv/bin/pytest tests/test_stats.py -v`
+Expected: 4 passed.
+
+- [ ] **Step 6: Append to `tests/test_clip_report.py`**
+
+```python
+def test_acc_ci_and_significance(tmp_path, capsys):
+    from foodmm.clip.report import SIG_COLUMNS, add_acc_ci, significance_table
+
+    runs = tmp_path / "clip" / "runs"
+    _write(runs)
+    labels = np.arange(10) % 3
+    for run, n_right in (("image", 6), ("xattn_strict", 9)):
+        logits = np.zeros((10, 3), dtype=np.float32)
+        pred = labels.copy()
+        pred[n_right:] = (labels[n_right:] + 1) % 3
+        logits[np.arange(10), pred] = 1.0
+        np.savez(runs / run / "preds_test.npz", logits=logits, labels=labels, ids=np.array([f"s{i}" for i in range(10)]))
+    main = add_acc_ci(main_table(collect_clip_results(runs), 0.1), runs, n_boot=100, alpha=0.05, seed=0)
+    row = main.set_index("run").loc["image"]
+    assert row["acc_lo"] <= 0.6 <= row["acc_hi"]
+    assert np.isnan(main.set_index("run").loc["text_strict", "acc_lo"])  # no preds_test.npz
+    sig = significance_table(tmp_path, [["clip/runs/image", "clip/runs/xattn_strict"],
+                                        ["runs/image", "runs/early_strict"]], n_boot=100, alpha=0.05, seed=0)
+    assert list(sig.columns) == SIG_COLUMNS and len(sig) == 1
+    r = sig.iloc[0]
+    assert r["run_a"] == "clip/runs/image" and r["diff"] == pytest.approx(0.3) and r["only_b_correct"] == 3
+    assert "Skipping runs/image vs runs/early_strict" in capsys.readouterr().out
+```
+
+Also add `import pytest` to the imports at the top of `tests/test_clip_report.py`, and extend the file list in `test_summarize_clip_script` to include `"significance.csv", "significance.md"`.
+
+- [ ] **Step 7: Append to `src/foodmm/clip/report.py`**
+
+```python
+SIG_COLUMNS = ["run_a", "run_b", "n", "acc_a", "acc_b", "diff", "diff_lo", "diff_hi", "only_a_correct",
+               "only_b_correct", "mcnemar_p"]
+
+
+def add_acc_ci(table: pd.DataFrame, runs_dir: str | Path, n_boot: int, alpha: float, seed: int) -> pd.DataFrame:
+    from ..late_fusion import load_preds
+    from ..stats import bootstrap_ci, correct_vector
+
+    out = table.copy()
+    lo, hi = [], []
+    for run in out["run"]:
+        try:
+            c = correct_vector(load_preds(Path(runs_dir) / run, "test"))
+        except FileNotFoundError:
+            lo.append(float("nan"))
+            hi.append(float("nan"))
+            continue
+        a, b = bootstrap_ci(c, n_boot, alpha, seed)
+        lo.append(a)
+        hi.append(b)
+    out.insert(out.columns.get_loc("acc") + 1, "acc_lo", lo)
+    out.insert(out.columns.get_loc("acc_lo") + 1, "acc_hi", hi)
+    return out
+
+
+def significance_table(work_dir: str | Path, pairs: Sequence[Sequence[str]], n_boot: int, alpha: float,
+                       seed: int) -> pd.DataFrame:
+    from ..stats import compare_runs
+
+    rows = []
+    for run_a, run_b in pairs:
+        try:
+            res = compare_runs(Path(work_dir) / run_a, Path(work_dir) / run_b, n_boot, alpha, seed)
+        except (FileNotFoundError, ValueError) as e:
+            print(f"Skipping {run_a} vs {run_b}: {e}")
+            continue
+        rows.append({"run_a": run_a, "run_b": run_b, **res})
+    return pd.DataFrame(rows, columns=SIG_COLUMNS)
+```
+
+- [ ] **Step 8: Replace `scripts/summarize_clip.py`**
+
+```python
+#!/usr/bin/env python
+"""Write the Milestone 2 tables and significance tests into work_dir/clip/results."""
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from foodmm.clip.features import clip_paths  # noqa: E402
+from foodmm.clip.report import (  # noqa: E402
+    add_acc_ci, collect_clip_results, collect_robust, main_table, missing_table, significance_table,
+    table_to_markdown,
+)
+from foodmm.config import add_config_args, config_from_args, work_paths  # noqa: E402
+from foodmm.utils import ensure_dir  # noqa: E402
+
+PCT = ["acc", "acc_lo", "acc_hi", "top5", "macro_f1", "full", "no_image", "no_text",
+       "acc_a", "acc_b", "diff", "diff_lo", "diff_hi"]
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    add_config_args(parser)
+    args = parser.parse_args(argv)
+    cfg = config_from_args(args)
+    cp = clip_paths(cfg)
+    df = collect_clip_results(cp["runs"])
+    if df.empty:
+        raise SystemExit(f"No finished runs found in {cp['runs']}")
+    out = ensure_dir(cp["results"])
+    mask, md = cfg["clip"]["main_mask"], float(cfg["head"]["default_modality_dropout"])
+    st, seed = cfg["stats"], int(cfg["seed"])
+    n_boot, alpha = int(st["n_boot"]), float(st["alpha"])
+    tables = {"main": add_acc_ci(main_table(df, md), cp["runs"], n_boot, alpha, seed),
+              "missing": missing_table(collect_robust(cp["runs"]), mask),
+              "significance": significance_table(work_paths(cfg)["work_dir"], st["pairs"], n_boot, alpha, seed)}
+    for name, table in tables.items():
+        table.to_csv(out / f"{name}.csv", index=False)
+        md_text = table_to_markdown(table, PCT)
+        (out / f"{name}.md").write_text(md_text + "\n", encoding="utf-8")
+        print(f"\n## {name}\n{md_text}")
+    print(f"\nWrote results to {out}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+```
+
+- [ ] **Step 9: Run tests to verify they pass**
+
+Run: `.venv/bin/pytest tests/test_stats.py tests/test_clip_report.py tests/test_config.py -v`
+Expected: all pass (4 + 4 + config tests).
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add configs/default.yaml src/foodmm/stats.py src/foodmm/clip/report.py scripts/summarize_clip.py tests/test_stats.py tests/test_clip_report.py
+git commit -m "feat(stats): bootstrap CIs and McNemar tests for the main comparisons"
 ```
 
 ---
@@ -2455,7 +2672,7 @@ run("prepare_data.py", "--set", *BASE)
 
 ```python
 #!/usr/bin/env python
-"""Generate notebooks/02_milestone2.ipynb (CLIP features, fusion heads, ablations)."""
+"""Generate notebooks/02_milestone2.ipynb (CLIP features and fusion heads)."""
 from __future__ import annotations
 
 import sys
@@ -2467,11 +2684,11 @@ from nb_utils import NOTEBOOK_DIR, NotebookBuilder, add_data, add_setup  # noqa:
 
 nb = NotebookBuilder()
 nb.md(r'''
-# Mốc 2: Đặc trưng CLIP, các kiểu fusion và ablation
+# Mốc 2: Đặc trưng CLIP và các kiểu fusion
 
 CLIP ViT-B/16 được đóng băng. Đặc trưng được trích xuất một lần và lưu trên Drive (`foodmm/clip/features`), sau đó các head nhẹ được huấn luyện trên đặc trưng này.
 
-**Thứ tự chạy:** setup → dữ liệu → chạy thử → trích xuất → các run chính → ablation → kết quả. Mọi bước đều chạy lại được: phần đã xong sẽ được bỏ qua.
+**Thứ tự chạy:** setup → dữ liệu → chạy thử → trích xuất → các run → kết quả. Mọi bước đều chạy lại được: phần đã xong sẽ được bỏ qua.
 ''')
 add_setup(nb)
 add_data(nb)
@@ -2482,52 +2699,41 @@ Ghi vào `/content/smoke_clip`, không đụng tới Drive. Dùng để kiểm t
 ''')
 nb.code(r'''
 SMOKE = ["--set", f"paths.data_root={DATA_ROOT}", "paths.work_dir=/content/smoke_clip",
-         "data.subset_classes=5", "data.max_per_class=60", "head.epochs=3",
-         "clip_suite.masks=[strict]", "clip_suite.fracs=[0.5]", "clip_suite.missing_md=[0.3]"]
+         "data.subset_classes=5", "data.max_per_class=60", "head.epochs=3", "clip_suite.masks=[strict]"]
 run("prepare_data.py", "--force", *SMOKE)
-run("extract_clip.py", "--parts", "image,text_strict,corrupt", "--force", *SMOKE)
+run("extract_clip.py", "--parts", "image,text_strict", "--force", *SMOKE)
 run("zero_shot_clip.py", "--force", *SMOKE)
-run("run_clip_suite.py", "--stage", "all", *SMOKE)
+run("run_clip_suite.py", *SMOKE)
 run("summarize_clip.py", *SMOKE)
 ''')
 
 nb.md(r'''
 ## 2. Trích xuất đặc trưng CLIP
-Ảnh train/val/test, text theo 3 chế độ che, và các bản test bị nhiễu. Nếu mất session, chạy lại cell này để tiếp tục từ shard cuối cùng.
+Ảnh train/val/test và text theo 2 chế độ che `none`, `strict`. Nếu mất session, chạy lại cell này để tiếp tục từ shard cuối cùng.
 ''')
 nb.code(r'''
-run("extract_clip.py", "--set", *BASE)
+run("extract_clip.py", "--parts", "image,text_none,text_strict", "--set", *BASE)
 ''')
 
 nb.md(r'''
-## 3. Zero-shot và các run chính
-`image`, `text_{none,exact,strict}`, `{concat,gated,xattn}_{none,exact,strict}`, `late_{none,exact,strict}`.
+## 3. Zero-shot và các run
+`zeroshot`, `image`, `text_{none,strict}`, `{concat,gated,xattn}_{none,strict}`, `late_{none,strict}`. Mỗi run fusion tự đánh giá thêm khi bỏ ảnh / bỏ text trên tập test (bảng thiếu modality).
 ''')
 nb.code(r'''
-run("run_clip_suite.py", "--stage", "main", "--set", *BASE)
+run("run_clip_suite.py", "--set", *BASE)
 ''')
 
 nb.md(r'''
-## 4. Ablation: thiếu modality và tỷ lệ dữ liệu
-Head fusion được train với modality dropout 0 và 0.3 (0.1 lấy từ run chính). Sau đó train với 10/25/50% dữ liệu train.
+## 4. Kết quả
 ''')
 nb.code(r'''
-run("run_clip_suite.py", "--stage", "missing", "--set", *BASE)
-run("run_clip_suite.py", "--stage", "frac", "--set", *BASE)
-''')
-
-nb.md(r'''
-## 5. Kết quả
-''')
-nb.code(r'''
-from IPython.display import Image, Markdown, display
+from IPython.display import Markdown, display
 
 run("summarize_clip.py", "--set", *BASE)
 RESULTS = WORK_DIR / "clip" / "results"
-display(Markdown("### Kết quả chính\n" + (RESULTS / "main.md").read_text()))
+display(Markdown("### Kết quả chính (acc_lo/acc_hi: khoảng tin cậy 95%, bootstrap)\n" + (RESULTS / "main.md").read_text()))
+display(Markdown("### Kiểm định cặp (diff = acc_b − acc_a, McNemar)\n" + (RESULTS / "significance.md").read_text()))
 display(Markdown("### Thiếu modality (accuracy)\n" + (RESULTS / "missing.md").read_text()))
-display(Image(str(RESULTS / "robust.png")))
-display(Image(str(RESULTS / "frac.png")))
 ''')
 
 nb.md(r'''
@@ -2548,7 +2754,7 @@ for p in sorted(CP["runs"].glob("gated_*/metrics_test.json")):
 ''')
 
 nb.md(r'''
-## 6. t-SNE trên 20 lớp của tập test
+## 5. t-SNE trên 20 lớp của tập test
 So sánh đặc trưng ảnh CLIP, đặc trưng text CLIP (`strict`) và đặc trưng fusion của `xattn_strict`.
 ''')
 nb.code(r'''
@@ -2573,7 +2779,7 @@ for title, feats in sources.items():
 ''')
 
 nb.md(r'''
-## 7. So sánh với Mốc 1
+## 6. So sánh với Mốc 1
 Chỉ hiện khi `results/summary.md` của Mốc 1 đã có. Lưu ý: DistilBERT ở Mốc 1 đọc 256 token, còn CLIP chỉ đọc 77 token.
 ''')
 nb.code(r'''
@@ -2627,16 +2833,17 @@ def test_clip_pipeline_end_to_end(tmp_path):
     work = tmp_path / "work"
     sets = clip_smoke_overrides(data_root, work)
     run_script("prepare_data.py", "--set", *sets)
-    run_script("extract_clip.py", "--parts", "image,text_none,text_strict,corrupt", "--set", *sets)
-    out = run_script("run_clip_suite.py", "--stage", "all", "--set", *sets).stdout
-    assert "zeroshot" in out and "xattn_strict_frac0.5" in out
+    run_script("extract_clip.py", "--parts", "image,text_none,text_strict", "--set", *sets)
+    out = run_script("run_clip_suite.py", "--set", *sets).stdout
+    assert "zeroshot" in out and "late_strict" in out
     run_script("summarize_clip.py", "--set", *sets)
     main = pd.read_csv(work / "clip" / "results" / "main.csv")
     assert main["run"].tolist()[0] == "zeroshot" and "xattn_strict" in set(main["run"])
     missing = pd.read_csv(work / "clip" / "results" / "missing.csv")
-    assert {"late_strict", "xattn_strict", "xattn_strict_md0.3"} <= set(missing["run"])
-    robust = pd.read_csv(work / "clip" / "results" / "robust.csv")
-    assert set(robust["kind"]) == {"blur", "noise", "drop"}
+    assert {"late_strict", "concat_strict", "gated_strict", "xattn_strict"} <= set(missing["run"])
+    assert {"acc_lo", "acc_hi"} <= set(main.columns)
+    sig = pd.read_csv(work / "clip" / "results" / "significance.csv")
+    assert ("clip/runs/image", "clip/runs/xattn_strict") in set(zip(sig["run_a"], sig["run_b"]))
     m = json.loads((work / "clip" / "runs" / "gated_strict" / "metrics_test.json").read_text())
     assert m["head"] == "gated" and "mean_gate" in m
 ```

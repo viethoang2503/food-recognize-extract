@@ -1,7 +1,7 @@
 # Mốc 1: Pipeline dữ liệu và các baseline image / text / multimodal trên UPMC Food-101
 
 - Ngày: 2026-09-27
-- Trạng thái: chờ duyệt
+- Trạng thái: đã duyệt, đã triển khai. Kiểm định thống kê cho các run của Mốc 1 được tính ở Mốc 2 (`summarize_clip.py`, bảng `significance`)
 - Phạm vi: sub-project 1 trong 4 (1. baseline, 2. fusion nâng cao và ablation, 3. trích xuất thông tin bằng VLM, 4. demo Gradio)
 
 ## 1. Mục tiêu
@@ -19,7 +19,7 @@ Xây dựng pipeline có thể tái lập để trả lời câu hỏi: kết h�
 
 ### Ngoài phạm vi
 
-- Embedding CLIP/ViT, các kiểu fusion gated và cross-attention, ablation thiếu modality, thêm nhiễu, giảm dữ liệu (Mốc 2).
+- Embedding CLIP/ViT, các kiểu fusion gated và cross-attention, đánh giá thiếu modality (Mốc 2).
 - Trích xuất thông tin bằng VLM (sub-project 3) và demo (sub-project 4).
 - Món ăn Việt Nam và text tiếng Việt: đã bỏ khỏi toàn bộ dự án.
 
