@@ -10,3 +10,5 @@ __pycache__/
 *.npz
 kaggle.json
 .codegraph/
+
+.DS_Store

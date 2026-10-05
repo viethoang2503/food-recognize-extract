@@ -115,6 +115,8 @@ stats:
     - [clip/runs/image, clip/runs/xattn_strict]
     - [clip/runs/text_strict, clip/runs/xattn_strict]
     - [clip/runs/late_strict, clip/runs/xattn_strict]
+    - [clip/runs/late_strict, clip/runs/concat_strict]
+    - [clip/runs/late_strict, clip/runs/gated_strict]
     - [clip/runs/concat_strict, clip/runs/xattn_strict]
     - [clip/runs/gated_strict, clip/runs/xattn_strict]
     - [clip/runs/zeroshot, clip/runs/image]

@@ -1,0 +1,11 @@
+{
+  "text_source": "csv",
+  "n_images_found": 90704,
+  "n_dropped_no_text": 26,
+  "n_classes": 101,
+  "split_counts": {
+    "train": 61169,
+    "test": 22712,
+    "val": 6797
+  }
+}

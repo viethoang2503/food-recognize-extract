@@ -1,0 +1,61 @@
+row,id,label,image_path,dish_name,cuisine,main_ingredients,cooking_method,confidence,grade_dish,grade_ingredients,grade_method,notes
+0,images/test/frozen_yogurt/frozen_yogurt_954.jpg,frozen_yogurt,images/test/frozen_yogurt/frozen_yogurt_954.jpg,unknown,unknown,,unknown,0.1,0,0,0,
+1,images/test/guacamole/guacamole_278.jpg,guacamole,images/test/guacamole/guacamole_278.jpg,Green Mom,Unknown,,Unknown,0.1,0,0,0,
+2,images/test/lobster_roll_sandwich/lobster_roll_sandwich_755.jpg,lobster_roll_sandwich,images/test/lobster_roll_sandwich/lobster_roll_sandwich_755.jpg,Craic,Irish,,,0.1,0,0,0,"anh la ao in chu 'Craic', khong co mon an"
+3,images/test/poutine/poutine_567.jpg,poutine,images/test/poutine/poutine_567.jpg,Caramelized Doughnut Sticks,American,dough; caramel sauce; butter,fried and glazed,0.95,1,2,1,nhan poutine sai: anh la banh donut phu caramel; cham theo anh
+4,images/test/ravioli/ravioli_852.jpg,ravioli,images/test/ravioli/ravioli_852.jpg,unknown,unknown,,unknown,0.1,0,0,0,
+5,images/test/crab_cakes/crab_cakes_435.jpg,crab_cakes,images/test/crab_cakes/crab_cakes_435.jpg,Fish Cakes,Australian,fish; avocado; onion; herbs; breadcrumbs; egg; salt; pepper,pan-frying,0.95,1,2,1,"anh la banh chien (cua hoac ca), khong phan biet duoc"
+6,images/test/frozen_yogurt/frozen_yogurt_954.jpg,frozen_yogurt,images/test/frozen_yogurt/frozen_yogurt_954.jpg,Watermelon Ice Cream,American,watermelon; ice cream,chilled,0.95,1,2,1,kem mau hong + dua hau
+7,images/test/ramen/ramen_509.jpg,ramen,images/test/ramen/ramen_509.jpg,roast beef,western,beef,roasting,0.95,1,1,1,nhan ramen sai: anh la thit bo nuong; cham theo anh
+8,images/test/lobster_roll_sandwich/lobster_roll_sandwich_51.jpg,lobster_roll_sandwich,images/test/lobster_roll_sandwich/lobster_roll_sandwich_51.jpg,Lobster Roll,American,lobster; bread; mayo,grilled or toasted,0.95,1,1,0,"anh la noi that nha hang, ten mon suy ra tu bien hieu LOBSTER ME"
+9,images/test/omelette/omelette_129.jpg,omelette,images/test/omelette/omelette_129.jpg,Vegetable Omelette,Italian,eggs; bell peppers; green beans; basil; chopped herbs,Fried,0.95,1,2,1,
+10,images/test/ceviche/ceviche_784.jpg,ceviche,images/test/ceviche/ceviche_784.jpg,Seafood Salad with Fried Items,Spanish,shrimp; octopus; tomato; cilantro; onion; lime; olive oil; fries,grilled and fried,0.85,1,2,1,salad hai san + banh chien ben canh
+11,images/test/fried_rice/fried_rice_148.jpg,fried_rice,images/test/fried_rice/fried_rice_148.jpg,Ginger Beef Rice,Chinese,rice; beef; ginger; scallions; carrots; broccoli; eggs,stir-fried,0.95,1,2,1,com chien thit bo
+12,images/test/lobster_roll_sandwich/lobster_roll_sandwich_51.jpg,lobster_roll_sandwich,images/test/lobster_roll_sandwich/lobster_roll_sandwich_51.jpg,Lobster Roll,American,lobster; bun; mayonnaise,Grilled or steamed,0.95,1,1,0,nhu row 8
+13,images/test/poutine/poutine_567.jpg,poutine,images/test/poutine/poutine_567.jpg,Doughnut,North American,dough; flour; sugar; butter; eggs; yeast; milk; baking powder; vanilla extract; cinnamon; sugar glaze,Fried or baked,0.85,1,1,1,nhu row 3
+14,images/test/frozen_yogurt/frozen_yogurt_954.jpg,frozen_yogurt,images/test/frozen_yogurt/frozen_yogurt_954.jpg,watermelon ice cream,American,watermelon; ice cream,chilled,0.95,1,2,1,nhu row 6
+15,images/test/beet_salad/beet_salad_881.jpg,beet_salad,images/test/beet_salad/beet_salad_881.jpg,Marinated Fish with Fresh Orange,Asian,fish; orange; marinade,marinating,0.8,0,0,0,
+16,images/test/chicken_wings/chicken_wings_540.jpg,chicken_wings,images/test/chicken_wings/chicken_wings_540.jpg,Super Bowl Party Food,American,bread; cheese; meat; vegetables,baked or grilled,0.7,0,0,1,
+17,images/test/lobster_roll_sandwich/lobster_roll_sandwich_755.jpg,lobster_roll_sandwich,images/test/lobster_roll_sandwich/lobster_roll_sandwich_755.jpg,Craic,Irish,,,0.1,0,0,0,nhu row 2
+18,images/test/pad_thai/pad_thai_981.jpg,pad_thai,images/test/pad_thai/pad_thai_981.jpg,unknown,unknown,,unknown,0.1,0,0,0,
+19,images/test/ramen/ramen_509.jpg,ramen,images/test/ramen/ramen_509.jpg,sushi,Japanese,rice; fish; seaweed,steaming,0.8,0,0,0,sushi sai
+20,images/test/ceviche/ceviche_784.jpg,ceviche,images/test/ceviche/ceviche_784.jpg,Seafood Salad with Fried Items,Spanish,shrimp; octopus; tomato; cilantro; onion; fried item,grilled or fried,0.85,1,2,1,nhu row 10
+21,images/test/guacamole/guacamole_278.jpg,guacamole,images/test/guacamole/guacamole_278.jpg,guacamole,Mexican,avocado; tomato; onion; lime; cilantro; jalapeño,mashed,0.95,1,2,1,
+22,images/test/ramen/ramen_509.jpg,ramen,images/test/ramen/ramen_509.jpg,Roast Beef,Western,beef,Roasting,0.95,1,1,1,nhu row 7
+23,images/test/fried_rice/fried_rice_148.jpg,fried_rice,images/test/fried_rice/fried_rice_148.jpg,ginger chicken,American,chicken; ginger,baking or frying,0.85,0,0,0,
+24,images/test/poutine/poutine_567.jpg,poutine,images/test/poutine/poutine_567.jpg,Doughnut,American,dough; sugar glaze; butter,fried,0.95,1,2,1,nhu row 3
+25,images/test/crab_cakes/crab_cakes_435.jpg,crab_cakes,images/test/crab_cakes/crab_cakes_435.jpg,Fish Cakes with Avocado Salsa,American,fish; avocado; onion; cilantro; lime; salt; pepper; garlic; breadcrumbs; herbs,pan-fried,0.95,1,2,1,nhu row 5
+26,images/test/beet_salad/beet_salad_881.jpg,beet_salad,images/test/beet_salad/beet_salad_881.jpg,Marinated Butternut Squash with Fresh Orange,Vegetarian,butternut squash; orange; parsley; olive oil,marinating,0.9,0,1,1,cubes vang co the la beet vang; khong phai squash
+27,images/test/grilled_salmon/grilled_salmon_395.jpg,grilled_salmon,images/test/grilled_salmon/grilled_salmon_395.jpg,grilled fish,American,fish; butter,grilled,0.95,1,1,1,
+28,images/test/omelette/omelette_129.jpg,omelette,images/test/omelette/omelette_129.jpg,Unknown,Unknown,,Unknown,0.0,0,0,0,
+29,images/test/beef_tartare/beef_tartare_476.jpg,beef_tartare,images/test/beef_tartare/beef_tartare_476.jpg,Crispy Fish with Quinoa Crust and Herb Purée,Modern European,fish; quinoa; herb purée; tomato sauce,Fried,0.85,0,1,1,anh la dia tartare + croquette; VLM doc thanh ca gion
+30,images/test/guacamole/guacamole_278.jpg,guacamole,images/test/guacamole/guacamole_278.jpg,guacamole,mexican,avocado; lime; onion; tomato; cilantro; jalapeño,mashed,0.95,1,2,1,
+31,images/test/grilled_salmon/grilled_salmon_395.jpg,grilled_salmon,images/test/grilled_salmon/grilled_salmon_395.jpg,Grilled Fish Fillets,American,fish; sauce,Grilling,0.95,1,2,1,
+32,images/test/crab_cakes/crab_cakes_435.jpg,crab_cakes,images/test/crab_cakes/crab_cakes_435.jpg,Unknown,Unknown,,Unknown,0.1,0,0,0,
+33,images/test/fried_rice/fried_rice_148.jpg,fried_rice,images/test/fried_rice/fried_rice_148.jpg,Asian-style rice salad,Asian,rice; beef; egg; broccoli; carrot; peas; onion; soy sauce; ginger; garlic,Stir-fried,0.95,0,2,1,goi la 'rice salad' nhung la com chien; nguyen lieu dung
+34,images/test/fried_rice/fried_rice_180.jpg,fried_rice,images/test/fried_rice/fried_rice_180.jpg,Chinese stir-fried noodles,Chinese,noodles; vegetables; protein,stir-fry,0.85,0,1,1,
+35,images/test/beet_salad/beet_salad_881.jpg,beet_salad,images/test/beet_salad/beet_salad_881.jpg,Roasted Butternut Squash with Parsley,American,butternut squash; parsley; garlic,Roasting,0.95,0,1,1,nhu row 26
+36,images/test/beef_tartare/beef_tartare_476.jpg,beef_tartare,images/test/beef_tartare/beef_tartare_476.jpg,noodle dish,German,noodles; sauce,boiled,0.7,0,0,0,
+37,images/test/baklava/baklava_317.jpg,baklava,images/test/baklava/baklava_317.jpg,Unknown,Unknown,,Unknown,0.1,0,0,0,
+38,images/test/pad_thai/pad_thai_981.jpg,pad_thai,images/test/pad_thai/pad_thai_981.jpg,Pad Thai,Thai,rice noodles; egg; chicken; lime; green onions; peanuts,stir-fried,0.95,1,2,1,
+39,images/test/ravioli/ravioli_852.jpg,ravioli,images/test/ravioli/ravioli_852.jpg,Ravioli,Italian,ravioli; tomato sauce; ground meat; cheese; pepper,Baked or sautéed,0.95,1,2,1,
+40,images/test/chicken_wings/chicken_wings_540.jpg,chicken_wings,images/test/chicken_wings/chicken_wings_540.jpg,baked chicken wings,American,chicken wings; oil; seasoning,baking,0.95,1,2,1,
+41,images/test/beef_tartare/beef_tartare_476.jpg,beef_tartare,images/test/beef_tartare/beef_tartare_476.jpg,Crispy Fish with Herb Purée,French,fish; herb purée; crispy breadcrumbs; tomato sauce,Fried,0.85,0,1,1,nhu row 29
+42,images/test/pad_thai/pad_thai_981.jpg,pad_thai,images/test/pad_thai/pad_thai_981.jpg,Pad Thai,Thai,rice noodles; chicken; lime; green onions; egg,Stir-fried,0.95,1,2,1,
+43,images/test/omelette/omelette_129.jpg,omelette,images/test/omelette/omelette_129.jpg,vegetable omelette,European,eggs; bell peppers; green beans; basil; chives,frying,0.95,1,2,1,
+44,images/test/grilled_salmon/grilled_salmon_395.jpg,grilled_salmon,images/test/grilled_salmon/grilled_salmon_395.jpg,pearls in paradise,Chinese,rice noodles; shrimp; vegetables; soy sauce; garlic; ginger,stir-fried,0.75,0,0,0,
+45,images/test/lobster_roll_sandwich/lobster_roll_sandwich_755.jpg,lobster_roll_sandwich,images/test/lobster_roll_sandwich/lobster_roll_sandwich_755.jpg,Elsa's - East Town - Milwaukee,American,,,0.1,0,0,0,nhu row 2
+46,images/test/fried_rice/fried_rice_180.jpg,fried_rice,images/test/fried_rice/fried_rice_180.jpg,Chinese Chicken Stir-Fried Rice,Chinese,rice; chicken; peas; carrots; onions,stir-fried,0.98,1,2,1,anh co chu 'Chinese Chicken stir-fried rice' trong anh
+47,images/test/guacamole/guacamole_126.jpg,guacamole,images/test/guacamole/guacamole_126.jpg,guacamole,Mexican,avocado; onion; tomato; cilantro; lime,mashed,0.98,1,2,1,
+48,images/test/baklava/baklava_317.jpg,baklava,images/test/baklava/baklava_317.jpg,baklava,Middle Eastern,phyllo dough; nuts; sugar; 蜂蜜; oil,baking,0.95,1,2,1,co ky tu Trung 'mat ong' trong danh sach nguyen lieu
+49,images/test/baklava/baklava_317.jpg,baklava,images/test/baklava/baklava_317.jpg,Baklava,Middle Eastern,phyllo dough; nuts; sugar; 蜂蜜; oil,baking,0.95,1,2,1,nhu row 48
+50,images/test/spring_rolls/spring_rolls_642.jpg,spring_rolls,images/test/spring_rolls/spring_rolls_642.jpg,Spring Rolls,Asian,rice paper; fish; basil; red chili,Fried,0.9,1,2,1,
+51,images/test/ceviche/ceviche_784.jpg,ceviche,images/test/ceviche/ceviche_784.jpg,Unknown,Unknown,,Unknown,0.0,0,0,0,
+52,images/test/spring_rolls/spring_rolls_642.jpg,spring_rolls,images/test/spring_rolls/spring_rolls_642.jpg,Prawn Spring Rolls,Asian,prawn; rice paper; basil; red chili,Frying,0.9,1,2,1,
+53,images/test/lobster_roll_sandwich/lobster_roll_sandwich_51.jpg,lobster_roll_sandwich,images/test/lobster_roll_sandwich/lobster_roll_sandwich_51.jpg,Unknown,Unknown,,Unknown,0.0,0,0,0,
+54,images/test/guacamole/guacamole_126.jpg,guacamole,images/test/guacamole/guacamole_126.jpg,guacamole,mexican,avocado; onion; tomato; lime; cilantro,mashed,0.98,1,2,1,
+55,images/test/chicken_wings/chicken_wings_540.jpg,chicken_wings,images/test/chicken_wings/chicken_wings_540.jpg,Baked Chicken Wings,American,chicken wings,Baking,0.95,1,1,1,
+56,images/test/fried_rice/fried_rice_180.jpg,fried_rice,images/test/fried_rice/fried_rice_180.jpg,Chinese Chicken Stir-Fried Rice,Chinese,rice; chicken; peas; carrots; onions,stir-fried,0.98,1,2,1,nhu row 46
+57,images/test/guacamole/guacamole_126.jpg,guacamole,images/test/guacamole/guacamole_126.jpg,unknown,unknown,,unknown,0.1,0,0,0,
+58,images/test/spring_rolls/spring_rolls_642.jpg,spring_rolls,images/test/spring_rolls/spring_rolls_642.jpg,Prawn Curry,Indian,prawns; curry paste; coconut milk; tomatoes; onions; garlic; ginger; chili; turmeric; coriander,Simmering,0.85,0,0,0,
+59,images/test/ravioli/ravioli_852.jpg,ravioli,images/test/ravioli/ravioli_852.jpg,ravioli,Italian,dumpling; tomato sauce; cheese; meat,baked,0.9,1,2,1,

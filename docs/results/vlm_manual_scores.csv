@@ -1,0 +1,4 @@
+mode,grade_dish,grade_ingredients,grade_method,n_graded
+image,0.8,1.65,0.9,20
+image_text,0.85,1.65,0.9,20
+text,0.05,0.1,0.15,20
