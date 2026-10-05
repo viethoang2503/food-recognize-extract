@@ -4,7 +4,8 @@ import pytest
 
 from foodmm.data.text_utils import build_mask_pattern
 from foodmm.report_stats import (
-    add_bonferroni, fold_accents, graded_summary, residual_leakage, run_ci_table, vlm_paired,
+    add_bonferroni, classifier_errors, fold_accents, graded_summary, residual_leakage, run_ci_table, vlm_paired,
+    vlm_vs_classifier,
 )
 
 CLASSES = ["pho", "fried_rice", "creme_brulee", "hamburger"]
@@ -59,6 +60,35 @@ def test_vlm_paired():
     assert res["n"] == 3 and res["acc_a"] == pytest.approx(1 / 3) and res["acc_b"] == pytest.approx(1.0)
     assert (res["only_a_correct"], res["only_b_correct"]) == (0, 2)
     assert res["valid_a"] == 2 and res["valid_b"] == 3
+
+
+def _preds(ids, labels, preds, n_classes=4):
+    logits = np.zeros((len(ids), n_classes), dtype=np.float32)
+    logits[np.arange(len(ids)), preds] = 1.0
+    return {"ids": np.asarray(ids), "labels": np.asarray(labels), "logits": logits}
+
+
+def test_vlm_vs_classifier():
+    recs = [_rec("1", "pho", "Pho"), _rec("2", "fried_rice", "rice salad"), _rec("3", "pho", "x", valid=False),
+            _rec("9", "pho", "pho")]  # id 9 has no classifier prediction and is ignored
+    clf = _preds(["3", "2", "1"], [0, 1, 0], [0, 1, 0])  # classifier right on all three, ids shuffled
+    res = vlm_vs_classifier(recs, clf, CLASSES, threshold=0.6, n_boot=200, seed=0)
+    assert res["n"] == 3
+    assert res["acc_vlm"] == pytest.approx(1 / 3) and res["acc_classifier"] == pytest.approx(1.0)
+    assert (res["only_vlm_correct"], res["only_classifier_correct"]) == (0, 2)
+    assert res["diff"] == pytest.approx(2 / 3)
+
+
+def test_classifier_errors():
+    ids = [str(i) for i in range(8)]
+    labels = [0, 0, 0, 0, 1, 1, 2, 2]
+    img = _preds(ids, labels, [1, 1, 0, 0, 1, 1, 2, 0])   # class 0: 2/4, class 2: 1/2
+    fus = _preds(ids, labels, [0, 1, 0, 0, 1, 1, 2, 2])   # class 0: 3/4, class 2: 2/2
+    confused, gain = classifier_errors(img, fus, CLASSES, k=2)
+    assert confused.iloc[0][["true", "pred", "count"]].tolist() == ["pho", "fried_rice", 1]
+    g = gain.set_index("class")
+    assert g.loc["pho", "gain"] == pytest.approx(0.25) and g.loc["creme_brulee", "gain"] == pytest.approx(0.5)
+    assert set(gain["side"]) == {"most helped", "most hurt"}
 
 
 def test_graded_summary():

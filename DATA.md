@@ -6,8 +6,9 @@
 |---|---|
 | Dataset | **UPMC Food-101**: food photos paired with the text of the web page they come from, 101 dish classes (the Food-101 classes) |
 | Original release | X. Wang, D. Kumar, N. Thome, M. Cord, F. Precioso. *Recipe recognition with large multimodal food dataset.* IEEE ICME Workshops, 2015 |
+| Official page | VISIIR project, UPMC/LIP6: <http://visiir.lip6.fr/> (not reachable when we prepared the data) |
 | Copy used | Kaggle dataset `gianmarco96/upmcfood101`: <https://www.kaggle.com/datasets/gianmarco96/upmcfood101> |
-| Version | The Kaggle version available when we downloaded it (2026-09-30, the date of `stats.json`). The archive contains `images/{train,test}/<class>/*.jpg` and the texts as CSV files |
+| Version | **Kaggle Version 1** (last updated 2020-10-12, 8.3 GB), downloaded on 2026-09-30. The archive contains `images/{train,test}/<class>/*.jpg` and the texts as CSV files |
 | Licence | See the Kaggle page and the original paper; the images and texts were collected from the web and remain the property of their owners. We do not redistribute them |
 
 The download is automatic in the notebooks (Kaggle API, Colab Secret `KAGGLE_API_TOKEN` or `KAGGLE_USERNAME` +

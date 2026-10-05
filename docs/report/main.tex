@@ -50,11 +50,10 @@ baselines (ResNet-50, DistilBERT, TF-IDF, early and late fusion) with light head
 features, including concatenation, gated and cross-attention fusion. With masked text, the best image-only
 model reaches 79.06\% and the best text-only model 43.69\%, while cross-attention fusion reaches \best{85.45\%}
 (95\% CI 85.01--85.94), $+6.39$ points over the image head (McNemar $p<10^{-160}$). Without text, fusion falls
-back to near image-only accuracy; without the image, it drops below the text-only head unless trained with stronger
-modality dropout. Finally, the
-vision--language model Qwen3-VL-4B extracts dish, cuisine, ingredients and cooking method as JSON; it needs the
-image, and adding the masked text brings no measurable gain. Error analysis shows that label noise, a
-string-matching evaluation and dish names that escape the mask explain most of the remaining errors.
+back to near image-only accuracy; without the image, it drops below the text-only head; stronger modality dropout closes this gap for
+cross-attention and narrows it for concatenation. The vision--language model Qwen3-VL-4B extracts dish, cuisine,
+ingredients and cooking method as JSON; it needs the image, and the masked text adds no measurable gain. A qualitative error analysis points to label noise,
+string-matching evaluation and visually ambiguous plates as the main sources of the remaining errors.
 \end{abstract}
 
 % =================================================================================
@@ -127,9 +126,10 @@ of them is correct~\cite{mcnemar1947}; we add percentile bootstrap intervals and
 \label{sec:data}
 
 \paragraph{Source, version and split.}
-We use UPMC Food-101~\cite{wang2015recipe}, downloaded from the Kaggle copy
-\url{https://www.kaggle.com/datasets/gianmarco96/upmcfood101} (dataset \texttt{gianmarco96/upmcfood101}, the
-version available on 2026-09-30, the date of our data snapshot). Each sample is a photo and the text of its source
+We use UPMC Food-101~\cite{wang2015recipe}. It was released by its authors on the VISIIR project page of
+UPMC/LIP6 (\url{http://visiir.lip6.fr/}), which was not reachable when we prepared the data, so we use the public
+Kaggle copy \url{https://www.kaggle.com/datasets/gianmarco96/upmcfood101} (\textbf{Version~1}, last updated
+2020-10-12, 8.3\,GB, downloaded on 2026-09-30). Each sample is a photo and the text of its source
 web page, labeled with one of 101 dishes. The archive ships with a train/test split, which we keep unchanged. We
 hold out a stratified 10\% of the official training set as a validation set (seed 42) and drop 26 samples whose
 text is empty (Table~\ref{tab:data}). \texttt{DATA.md} in the repository gives the full procedure, and
@@ -457,7 +457,7 @@ and 80.5\% (cross-attention fusion, 74.5--86.0).}
 \toprule
 Mode & Valid JSON & Retry & Latency (mean / p90) & Dish acc. & 95\% CI & Unmapped \\
 \midrule
-Image & 100.0\% & 0.0\% & 3.56 / 4.30 s & \best{61.0\%} & 54.5--67.5 & 24.5\% \\
+Image & 100.0\% & 0.0\% & 3.56 / 4.30 s & 61.0\% & 54.5--67.5 & 24.5\% \\
 Text (masked) & 99.5\% & 0.5\% & 2.91 / 3.97 s & 5.5\% & 2.5--9.0 & 79.9\% \\
 Image + text & 100.0\% & 0.0\% & 3.57 / 4.26 s & 60.0\% & 53.0--67.0 & 24.5\% \\
 \bottomrule
@@ -490,12 +490,22 @@ changes dish accuracy from 61.0\% to 60.0\% on the same 200 images: 8 images are
 only with image and text (paired difference $-1.0$ points, CI $-4.5$ to $+2.5$; McNemar $p=0.79$). In the manual grades they disagree on
 the dish for one image out of 20 ($p=1.0$), a borderline name discussed in Section~\ref{sec:errors}. The VLM
 already recognizes most dishes from the photo, and the masked text adds little it does not see.
-\emph{Classifier versus VLM.} On the same 200 images, the CLIP classifiers are more accurate for the dish (76.0\%
-image, 80.5\% fusion) because they choose among 101 known classes, whereas the VLM answers in an open vocabulary
-that must then be mapped. The VLM, however, produces what the classifiers cannot: plausible ingredient lists and
-cooking methods. For a \emph{guacamole} image it returns \texttt{\{"dish\_name": "guacamole", "cuisine": "Mexican",
-"main\_ingredients": ["avocado", "tomato", "onion", "lime", "cilantro", "jalape\~no"], "cooking\_method": "mashed",
-"confidence": 0.95\}}.
+\emph{Classifier versus VLM.} On the same 200 images, the CLIP classifiers score higher on the label-based dish
+accuracy (76.0\% image head, 80.5\% fusion, against 61.0\% and 60.0\% for the VLM) \todo{paired test from
+report\_stats.py, section vlm\_vs\_classifier: VLM image vs image head, $\Delta$ = ..., McNemar $p$ = ...; VLM
+image+text vs xattn, $\Delta$ = ..., $p$ = ...}. Part of this gap comes from the evaluation rather than the model:
+the classifiers choose among the 101 known classes, whereas the VLM answers in an open vocabulary that must then be
+mapped, and on the graded images its manual dish score (0.80--0.85) is close to the classifiers. The VLM, however,
+produces what the classifiers cannot: plausible ingredient lists and cooking methods. For a \emph{guacamole} image
+it returns:
+\begin{center}
+\small
+\begin{tabular}{@{}l@{}}
+\texttt{\{"dish\_name": "guacamole", "cuisine": "Mexican",} \\
+\texttt{\ \ "main\_ingredients": ["avocado", "tomato", "onion", "lime", "cilantro",} \\
+\texttt{\ \ \ \ "jalape\~no"], "cooking\_method": "mashed", "confidence": 0.95\}}
+\end{tabular}
+\end{center}
 
 \subsection{Setup 3: analysis, robustness and ablation}
 \label{sec:res-robust}
@@ -552,10 +562,11 @@ Cross-attention & 85.45 & 77.70 & 34.96 \\
 Table~\ref{tab:md} retrains concat and cross-attention with modality dropout 0 and 0.3. Without dropout, the heads
 collapse when an input is missing (cross-attention: 23.95\% without the image, 72.87\% without text). Raising the
 rate steadily improves both missing-modality conditions: at 0.3, cross-attention reaches 38.58\% without the image,
-on par with the dedicated text head (38.22\%), and 78.34\% without text, close to the image head (79.06\%). With
-both inputs, each head's accuracy changes by at most 0.21 points across the three rates, well inside the confidence
-intervals. Modality dropout
-thus buys robustness at no visible cost, and 0.3 would be a better default than our 0.1.
+on par with the dedicated text head (38.22\%), and 78.34\% without text, close to the image head (79.06\%). For concat, 0.3 narrows the image-removed gap
+(36.86\%) but does not close it. With both inputs, each head's accuracy changes by at most 0.21 points across the
+three rates, well inside the confidence intervals (we did not run paired tests for these runs). Modality dropout
+thus buys robustness with no measurable cost, and 0.3 looks like a better default than our 0.1; since this rate
+was chosen after seeing test results, a validation-based choice would be needed to confirm it.
 
 \begin{table}[!htbp]
 \centering
@@ -594,7 +605,7 @@ audit; the paragraphs below explain their causes.
 \caption{Representative error cases and their causes.}
 \label{tab:errors}
 \small
-\begin{tabularx}{\linewidth}{lXX}
+\begin{tabularx}{\linewidth}{l>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X}
 \toprule
 Source & Case & Cause \\
 \midrule
@@ -602,8 +613,8 @@ Dataset & Image labeled \emph{poutine} shows glazed doughnuts; \emph{ramen} show
 VLM is right (``Caramelized Doughnut Sticks'', ``Roast Beef'') but scored wrong by label \\
 Dataset & Images with no food (a T-shirt, a restaurant interior) & Web noise; the VLM answers ``unknown'' or a word
 printed in the image, with confidence 0.1 \\
-VLM, image & \emph{beef\_tartare} described as ``Crispy Fish with Herb Pur\'ee'' (confidence 0.85) & The plate also
-holds fried croquettes, which dominate the photo; overconfident open-vocabulary answer \\
+VLM, image & \emph{beef\_tartare} described as ``Crispy Fish with Herb Pur\'ee'' (confidence 0.85) & Breaded croquettes and
+quinoa crumbs on the plate look like fried fish; the raw tartare, the largest item, is missed \\
 VLM, image & \emph{beet\_salad} described as ``Roasted Butternut Squash'' & Yellow beet cubes look like squash;
 visually ambiguous ingredient \\
 VLM, mapping & ``Fish Cakes'' (crab cakes) mapped to \emph{cup\_cakes} & String similarity on the generic word
@@ -633,9 +644,14 @@ fails on 24.5\% of answers or picks a wrong class from a generic word, and some 
 has its own limits: names such as ``Asian-style rice salad'' for fried rice are judgment calls, and the single
 image where the image and image+text modes disagree is exactly such a case.
 
+\paragraph{Classifier errors.}
+\todo{Table: top-5 confused pairs of xattn\_strict (report\_stats.py, classifier\_confused\_xattn) and the five
+classes most helped / hurt by adding text (classifier\_text\_gain), with two sentences on why: visually similar
+dishes, and which classes the masked text helps.}
+
 \paragraph{Errors that come from the models.}
-The VLM's real errors are confident misidentifications of visually ambiguous plates (fish versus tartare with
-croquettes, squash versus yellow beet) and occasional language drift. For the classifiers, fusion fixes 2,115 of
+The VLM's real errors are confident misidentifications of visually ambiguous plates (breaded croquettes read as fried
+fish next to a raw tartare, squash versus yellow beet) and occasional language drift. For the classifiers, fusion fixes 2,115 of
 the image head's errors but introduces 664 new ones: when the masked text points to the wrong dish, the fusion head
 can follow it. The demo shows an extreme case. A Vietnamese caption pushed the fusion head toward \emph{pho} while
 the image head correctly predicted \emph{pizza}. A possible cause is the masking gap of Section~\ref{sec:data}:
@@ -653,7 +669,8 @@ stronger modality. With dish names masked, the image is the primary signal (79.0
 features reaches 85.45\% accuracy and 95.49\% top-5, $+6.39$ points over the image head. Feature-level fusion is
 1.2--1.7 points above late fusion, the specific operator matters little, and the pretrained encoder matters most.
 Fusion models lean on the image; with 10\% modality dropout they fall below the text-only head when the image is
-missing, and raising the rate to 0.3 closes this gap at no cost. Beyond the class label, a 4B-parameter VLM extracts
+missing, and raising the rate to 0.3 closes this gap for cross-attention and narrows it for concatenation, with no
+measurable cost when both inputs are present. Beyond the class label, a 4B-parameter VLM extracts
 usable ingredients and cooking methods from the photo, but it needs the image, and the masked text adds nothing
 measurable.
 
@@ -734,6 +751,7 @@ X.~Wang, D.~Kumar, N.~Thome, M.~Cord, and F.~Precioso.
 \end{thebibliography}
 
 % =================================================================================
+\clearpage
 \appendix
 \section{Member Contributions}
 

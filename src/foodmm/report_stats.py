@@ -123,3 +123,37 @@ def graded_summary(sheet: pd.DataFrame, key: pd.DataFrame, classes: Sequence[str
         paired.append({"grade": col, "a": pair[0], "b": pair[1], "n": len(ids), "only_a_correct": only_a,
                        "only_b_correct": only_b, "mcnemar_p": p})
     return summary, pd.DataFrame(paired)
+
+
+def vlm_vs_classifier(records: Sequence[dict], clf_preds: dict, classes: Sequence[str], threshold: float,
+                      n_boot: int, seed: int, alpha: float = 0.05) -> dict:
+    """Paired comparison of a VLM mode (dish mapped to a class) with a classifier on the VLM sample ids."""
+    from .stats import correct_vector
+
+    cv = _dish_correct(records, classes, threshold)
+    cc = dict(zip(np.asarray(clf_preds["ids"]).astype(str), correct_vector(clf_preds)))
+    ids = sorted(set(cv) & set(cc))
+    v, c = np.array([cv[i] for i in ids]), np.array([bool(cc[i]) for i in ids])
+    lo, hi = bootstrap_ci(c.astype(float) - v.astype(float), n_boot, alpha, seed)
+    only_c, only_v, p = mcnemar(v, c)
+    return {"n": len(ids), "acc_vlm": float(v.mean()), "acc_classifier": float(c.mean()),
+            "diff": float(c.mean() - v.mean()), "diff_lo": lo, "diff_hi": hi, "only_vlm_correct": only_v,
+            "only_classifier_correct": only_c, "mcnemar_p": p}
+
+
+def classifier_errors(image_preds: dict, fusion_preds: dict, classes: Sequence[str], k: int = 10
+                      ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Most confused class pairs of the fusion model, and the classes most helped / hurt by adding text.
+
+    The two prediction dicts must cover the same test ids in the same order (same manifest).
+    """
+    from .analysis import per_class_gain
+    from .metrics import top_confused_pairs
+
+    confused = top_confused_pairs(np.asarray(fusion_preds["logits"]).argmax(axis=1),
+                                  np.asarray(fusion_preds["labels"]).astype(int), classes, k=k)
+    gain = per_class_gain(image_preds, fusion_preds, classes)
+    gain = gain[gain["n"] > 0].reset_index(drop=True)
+    helped = gain.head(k).assign(side="most helped")
+    hurt = gain.drop(helped.index).tail(k).iloc[::-1].assign(side="most hurt")
+    return confused, pd.concat([helped, hurt], ignore_index=True)

@@ -5,7 +5,9 @@ Sections (each is skipped with a note when its inputs are missing):
   significance_bonferroni  clip/results/significance.csv + Bonferroni over its rows (run summarize_clip.py first)
   m1_ci                    bootstrap CI of the Milestone 1 runs (same method as the Milestone 2 table)
   leakage_audit            masked texts that still contain a class word once diacritics are removed
+  classifier_errors        top confused class pairs of xattn_strict; classes most helped / hurt by adding text
   vlm_paired               image vs image_text dish accuracy on the VLM sample (paired, McNemar)
+  vlm_vs_classifier        each VLM mode vs the CLIP classifier of the same input on the same images (McNemar)
   manual_grades            manual grades per mode with CIs and label-based accuracy on the same rows
 """
 from __future__ import annotations
@@ -22,7 +24,7 @@ from foodmm.clip.report import table_to_markdown  # noqa: E402
 from foodmm.config import add_config_args, config_from_args, work_paths  # noqa: E402
 from foodmm.data.text_utils import build_mask_pattern, text_column  # noqa: E402
 from foodmm.report_stats import (  # noqa: E402
-    add_bonferroni, graded_summary, residual_leakage, run_ci_table, vlm_paired,
+    add_bonferroni, classifier_errors, graded_summary, residual_leakage, run_ci_table, vlm_paired, vlm_vs_classifier,
 )
 from foodmm.utils import ensure_dir, load_json  # noqa: E402
 
@@ -75,6 +77,20 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print("skip leakage_audit: manifest or classes.json not found (run prepare_data.py)")
 
+    from foodmm.late_fusion import load_preds
+
+    clip_runs = work / "clip" / "runs"
+    try:
+        img_p, fus_p = load_preds(clip_runs / "image", "test"), load_preds(clip_runs / "xattn_strict", "test")
+    except FileNotFoundError:
+        img_p = fus_p = None
+    if classes and img_p is not None:
+        confused, gain = classifier_errors(img_p, fus_p, classes, k=10)
+        _write(out, "classifier_confused_xattn", confused)
+        _write(out, "classifier_text_gain", gain)
+    else:
+        print("skip classifier_errors: clip/runs/image or clip/runs/xattn_strict predictions not found")
+
     from foodmm.vlm.extract import read_records, vlm_dir
 
     vdir, v = vlm_dir(cfg), cfg["vlm"]
@@ -84,6 +100,18 @@ def main(argv: list[str] | None = None) -> int:
         res = vlm_paired(recs["image"], recs["image_text"], classes, thr, n_boot, seed, alpha)
         valid = {f"valid_{m}": sum(bool(r["valid"]) for r in recs[m]) for m in recs}
         _write(out, "vlm_paired", pd.DataFrame([{"a": "image", "b": "image_text", **res, **valid}]))
+        rows = []
+        for mode in ("image", "image_text"):
+            rel = v["compare_runs"].get(mode)
+            try:
+                clf = load_preds(work / rel, "test")
+            except (FileNotFoundError, TypeError):
+                print(f"skip vlm_vs_classifier for {mode}: no predictions in {rel}")
+                continue
+            rows.append({"vlm_mode": mode, "classifier": rel,
+                         **vlm_vs_classifier(recs[mode], clf, classes, thr, n_boot, seed, alpha)})
+        if rows:
+            _write(out, "vlm_vs_classifier", pd.DataFrame(rows))
     else:
         print(f"skip vlm_paired: extraction records not found in {vdir}")
 
