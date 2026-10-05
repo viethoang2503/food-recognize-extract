@@ -490,10 +490,12 @@ changes dish accuracy from 61.0\% to 60.0\% on the same 200 images: 8 images are
 only with image and text (paired difference $-1.0$ points, CI $-4.5$ to $+2.5$; McNemar $p=0.79$). In the manual grades they disagree on
 the dish for one image out of 20 ($p=1.0$), a borderline name discussed in Section~\ref{sec:errors}. The VLM
 already recognizes most dishes from the photo, and the masked text adds little it does not see.
-\emph{Classifier versus VLM.} On the same 200 images, the CLIP classifiers score higher on the label-based dish
-accuracy (76.0\% image head, 80.5\% fusion, against 61.0\% and 60.0\% for the VLM) \todo{paired test from
-report\_stats.py, section vlm\_vs\_classifier: VLM image vs image head, $\Delta$ = ..., McNemar $p$ = ...; VLM
-image+text vs xattn, $\Delta$ = ..., $p$ = ...}. Part of this gap comes from the evaluation rather than the model:
+\emph{Classifier versus VLM.} On the same 200 images, the CLIP classifiers are significantly more accurate on the
+label-based dish metric: the image head beats the VLM's image mode by $+15.0$ points (CI 9.5--21.0; 36 images
+correct only for the classifier, 6 only for the VLM; McNemar $p=2.8\times10^{-6}$), and cross-attention fusion
+beats the image+text mode by $+20.5$ points (CI 14.0--27.5; 48 vs 7; $p=6.9\times10^{-8}$); both remain
+significant after a Bonferroni correction for the two tests. Part of this gap comes from the evaluation rather than
+the model:
 the classifiers choose among the 101 known classes, whereas the VLM answers in an open vocabulary that must then be
 mapped, and on the graded images its manual dish score (0.80--0.85) is close to the classifiers. The VLM, however,
 produces what the classifiers cannot: plausible ingredient lists and cooking methods. For a \emph{guacamole} image
@@ -645,9 +647,52 @@ has its own limits: names such as ``Asian-style rice salad'' for fried rice are 
 image where the image and image+text modes disagree is exactly such a case.
 
 \paragraph{Classifier errors.}
-\todo{Table: top-5 confused pairs of xattn\_strict (report\_stats.py, classifier\_confused\_xattn) and the five
-classes most helped / hurt by adding text (classifier\_text\_gain), with two sentences on why: visually similar
-dishes, and which classes the masked text helps.}
+Table~\ref{tab:clferr} lists the most frequent confusions of the cross-attention model and the classes whose
+accuracy changes most when text is added to the image (per-class accuracy of the image head versus cross-attention
+fusion, \texttt{scripts/report\_stats.py}). The confusions are between dishes that look alike and are often hard
+to tell apart even for people: ice cream and frozen yogurt (in both directions), tuna and beef tartare, filet mignon
+and steak, French toast and bread pudding; sushi and sashimi or dumplings and gyoza follow with 11 errors each.
+Some of these pairs are close to synonyms, so part of these errors reflects the label taxonomy rather than the
+model. Adding text helps most for classes where the photo alone is ambiguous, such as hot dog ($+32.9$ points),
+dumplings ($+23.2$), lobster roll sandwich ($+21.4$) and ice cream ($+18.5$), presumably because the remaining
+context words (ingredients, place, occasion) disambiguate them. Only 7 of the 101 classes lose accuracy, by at
+most 4.4 points (grilled cheese sandwich); these are classes the image head already recognizes well.
+
+\begin{table}[!htbp]
+\centering
+\caption{Classifier errors on the test set (\texttt{strict}). Left: most frequent confusions of cross-attention
+fusion. Right: per-class accuracy (\%) of the image head and of cross-attention fusion for the classes that gain
+or lose most when text is added.}
+\label{tab:clferr}
+\small
+\begin{tabular}{@{}llr@{}}
+\toprule
+True class & Predicted & Errors \\
+\midrule
+ice cream & frozen yogurt & 23 \\
+tuna tartare & beef tartare & 23 \\
+frozen yogurt & ice cream & 17 \\
+french toast & bread pudding & 14 \\
+filet mignon & steak & 14 \\
+\bottomrule
+\end{tabular}
+\hfill
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Class & Image & Fusion & $\Delta$ \\
+\midrule
+hot dog & 54.7 & 87.6 & $+32.9$ \\
+dumplings & 55.7 & 78.9 & $+23.2$ \\
+lobster roll sandwich & 61.9 & 83.3 & $+21.4$ \\
+ice cream & 59.5 & 78.0 & $+18.5$ \\
+hamburger & 68.2 & 84.1 & $+15.9$ \\
+\midrule
+grilled cheese sandwich & 87.3 & 83.0 & $-4.4$ \\
+strawberry shortcake & 89.7 & 88.3 & $-1.3$ \\
+beet salad & 89.7 & 88.4 & $-1.3$ \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \paragraph{Errors that come from the models.}
 The VLM's real errors are confident misidentifications of visually ambiguous plates (breaded croquettes read as fried
