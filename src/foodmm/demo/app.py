@@ -5,7 +5,7 @@ from collections.abc import Sequence
 
 from PIL import Image
 
-NO_EXAMPLES = {"info": "Chưa có ví dụ: chạy scripts/build_demo_examples.py để tạo examples.json"}
+NO_EXAMPLES = {"info": "No examples yet: run scripts/build_demo_examples.py to create examples.json"}
 
 
 def make_handlers(predictor, vlm, examples: Sequence[dict] | None):
@@ -41,37 +41,37 @@ def build_app(predictor, vlm=None, examples: Sequence[dict] | None = None):
             gr.Warning(out[4]["error"])
         return out
 
-    with gr.Blocks(title="Nhận diện món ăn đa phương thức") as app:
-        gr.Markdown("# Nhận diện món ăn từ ảnh và text\nCLIP ViT-B/16 đóng băng + các head của Mốc 2. "
-                    "Text được làm sạch và che tên món trước khi đưa vào model.")
-        with gr.Tab("Dự đoán"):
+    with gr.Blocks(title="Multimodal Food Recognition") as app:
+        gr.Markdown("# Food recognition from images and text\nFrozen CLIP ViT-B/16 with the Milestone 2 heads. "
+                    "The text is cleaned and every dish name is masked before it reaches the models.")
+        with gr.Tab("Predict"):
             with gr.Row():
                 with gr.Column():
-                    image = gr.Image(type="pil", label="Ảnh món ăn")
-                    text = gr.Textbox(label="Text (tùy chọn): công thức, mô tả...", lines=4)
-                    use_vlm = gr.Checkbox(label="Trích xuất thông tin bằng VLM (lần đầu mất vài phút)",
+                    image = gr.Image(type="pil", label="Food photo")
+                    text = gr.Textbox(label="Text (optional): recipe, description...", lines=4)
+                    use_vlm = gr.Checkbox(label="Extract information with the VLM (the first run takes a few minutes)",
                                           value=False, visible=vlm is not None)
-                    button = gr.Button("Dự đoán", variant="primary")
+                    button = gr.Button("Predict", variant="primary")
                 with gr.Column():
                     with gr.Row():
-                        l_img = gr.Label(num_top_classes=5, label="Chỉ ảnh")
-                        l_txt = gr.Label(num_top_classes=5, label="Chỉ text")
+                        l_img = gr.Label(num_top_classes=5, label="Image only")
+                        l_txt = gr.Label(num_top_classes=5, label="Text only")
                         l_fus = gr.Label(num_top_classes=5, label="Fusion")
-                    masked = gr.Textbox(label="Text sau khi che tên món", interactive=False)
-                    vlm_json = gr.JSON(label="Kết quả VLM")
+                    masked = gr.Textbox(label="Text after masking dish names", interactive=False)
+                    vlm_json = gr.JSON(label="VLM output")
             button.click(ui_predict, [image, text, use_vlm], [l_img, l_txt, l_fus, masked, vlm_json])
-        with gr.Tab("Ví dụ có sẵn"):
+        with gr.Tab("Examples"):
             if examples:
-                choice = gr.Dropdown(choices=[e["name"] for e in examples], label="Chọn ví dụ")
+                choice = gr.Dropdown(choices=[e["name"] for e in examples], label="Choose an example")
                 with gr.Row():
-                    ex_img = gr.Image(type="pil", label="Ảnh", interactive=False)
+                    ex_img = gr.Image(type="pil", label="Photo", interactive=False)
                     ex_text = gr.Textbox(label="Text", lines=6, interactive=False)
                 with gr.Row():
-                    e_img = gr.Label(num_top_classes=5, label="Chỉ ảnh")
-                    e_txt = gr.Label(num_top_classes=5, label="Chỉ text")
+                    e_img = gr.Label(num_top_classes=5, label="Image only")
+                    e_txt = gr.Label(num_top_classes=5, label="Text only")
                     e_fus = gr.Label(num_top_classes=5, label="Fusion")
-                e_masked = gr.Textbox(label="Text sau khi che tên món", interactive=False)
-                e_vlm = gr.JSON(label="Kết quả VLM (đã lưu)")
+                e_masked = gr.Textbox(label="Text after masking dish names", interactive=False)
+                e_vlm = gr.JSON(label="VLM output (saved)")
                 choice.change(on_example, choice, [ex_img, ex_text, e_img, e_txt, e_fus, e_masked, e_vlm])
             else:
                 gr.Markdown(NO_EXAMPLES["info"])

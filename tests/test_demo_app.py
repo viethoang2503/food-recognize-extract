@@ -13,7 +13,7 @@ TOP = {"apple pie": 0.7, "french fries": 0.2}
 class FakePredictor:
     def predict(self, image, text):
         if image is None and not (text or "").strip():
-            raise ValueError("Cần ảnh hoặc text")
+            raise ValueError("Please provide an image or a text")
         return {"image": TOP if image is not None else None, "text": TOP if text else None, "fusion": TOP,
                 "masked_text": "best [MASK]" if text else ""}
 
@@ -33,7 +33,7 @@ def test_lazy_vlm_loads_once():
     fb = FakeBackend()
     calls = []
     vlm = LazyVLM(lambda: calls.append(1) or fb)
-    assert vlm.extract(None, "  ") == {"error": "VLM cần ảnh hoặc text"} and not calls
+    assert vlm.extract(None, "  ") == {"error": "The VLM needs an image or a text"} and not calls
     out = vlm.extract(IMG)
     assert out["dish_name"] == "apple pie" and out["mode"] == "image"
     assert vlm.extract(IMG, "best [MASK]")["mode"] == "image_text"
@@ -66,7 +66,7 @@ def test_on_predict():
     assert on_predict(IMG, "best apple pie", True)[4]["mode"] == "image_text"
     assert on_predict(None, "best apple pie", True)[4]["mode"] == "text"
     img, txt, fus, masked, vlm = on_predict(None, "  ", True)
-    assert img is None and fus is None and "Cần ảnh" in vlm["error"]
+    assert img is None and fus is None and "provide an image" in vlm["error"]
 
 
 def test_on_predict_without_vlm_service():

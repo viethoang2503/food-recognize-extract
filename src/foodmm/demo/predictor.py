@@ -57,7 +57,7 @@ class DemoPredictor:
     def predict(self, image, text: str | None) -> dict:
         text = (text or "").strip()
         if image is None and not text:
-            raise ValueError("Cần ảnh hoặc text để dự đoán")
+            raise ValueError("Please provide an image or a text")
         enc, n = self.encoder, self.encoder.n_tokens
         masked = mask_text(clean_text(text, self.max_chars), self.pattern) if text else ""
         if image is not None:

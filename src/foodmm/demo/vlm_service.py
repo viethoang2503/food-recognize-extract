@@ -30,7 +30,7 @@ class LazyVLM:
         text = (text or "").strip()
         mode = choose_mode(image is not None, bool(text))
         if mode is None:
-            return {"error": "VLM cần ảnh hoặc text"}
+            return {"error": "The VLM needs an image or a text"}
         if self._error:
             return {"error": self._error}
         if self._backend is None:
@@ -41,7 +41,7 @@ class LazyVLM:
                     backend.load()
                 self._backend = backend
             except Exception as e:  # noqa: BLE001 - shown to the user instead of crashing the app
-                self._error = f"Không nạp được VLM: {e}. Hãy xem tab 'Ví dụ có sẵn'."
+                self._error = f"Could not load the VLM: {e}. See the 'Examples' tab."
                 return {"error": self._error}
         prompt = build_prompt(mode, text=text)
         img = resize_for_vlm(image, self.max_image_side) if mode != "text" else None
