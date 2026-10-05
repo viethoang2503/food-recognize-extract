@@ -33,6 +33,8 @@ Test set: 22,712 images, text masked with `strict`. 95% bootstrap confidence int
 - Fusion beats the image head by **+6.39 points** (paired CI 5.96–6.84, McNemar p < 1e-160).
 - With raw text (dish names kept) text-only models reach about 86%, so masking is necessary for a fair
   comparison.
+- Fusion relies mostly on the image. Raising modality dropout from 0.1 to 0.3 lifts cross-attention without the
+  image from 34.96% to 38.58% (text-only head: 38.22%) at no cost when both inputs are present.
 - Qwen3-VL-4B (200 test images): dish accuracy by label 61.0% with the image, 5.5% with masked text only, 60.0% with
   both. Manual grades with the image: dish 0.80–0.85, ingredients 1.65 / 2, cooking method 0.90.
 
@@ -150,6 +152,16 @@ python scripts/demo.py --share --set $P
 ```
 
 Without a GPU, `--no_vlm` disables the VLM option. The public `*.gradio.live` link expires when the session ends.
+
+**Permanent demo on Hugging Face Spaces** (CPU, image / text / fusion only; the VLM needs a GPU):
+
+```bash
+export HF_TOKEN=<write token>
+python scripts/deploy_space.py --space <hf-username>/food-recognition --set $P
+```
+
+The script bundles `space/app.py`, the `foodmm` package, the config and the three head checkpoints the demo loads
+(no dataset images unless `--with_examples`), then creates or updates the Space.
 
 ## Tests
 

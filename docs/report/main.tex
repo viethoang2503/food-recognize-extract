@@ -50,7 +50,8 @@ baselines (ResNet-50, DistilBERT, TF-IDF, early and late fusion) with light head
 features, including concatenation, gated and cross-attention fusion. With masked text, the best image-only
 model reaches 79.06\% and the best text-only model 43.69\%, while cross-attention fusion reaches \best{85.45\%}
 (95\% CI 85.01--85.94), $+6.39$ points over the image head (McNemar $p<10^{-160}$). Without text, fusion falls
-back to near image-only accuracy; without the image, it drops below the text-only head. Finally, the
+back to near image-only accuracy; without the image, it drops below the text-only head unless trained with stronger
+modality dropout. Finally, the
 vision--language model Qwen3-VL-4B extracts dish, cuisine, ingredients and cooking method as JSON; it needs the
 image, and adding the masked text brings no measurable gain. Error analysis shows that label noise, a
 string-matching evaluation and dish names that escape the mask explain most of the remaining errors.
@@ -186,9 +187,10 @@ Masking matches ASCII class names on word boundaries, so some variants of dish n
 accented spellings (\emph{pho} written with Vietnamese diacritics, \emph{cr\`eme br\^ul\'ee}, \emph{tiramis\`u},
 \emph{pa\"ella}), compounds (\emph{cheeseburgers}) and misspellings (\emph{spagetti}). We verified these cases with
 the masking code. To estimate how often accented variants occur, we remove diacritics from every masked text and
-check whether a class word reappears: \todo{X\% of strict test texts; most frequent tokens: ...}
-(\texttt{scripts/report\_stats.py}, section \texttt{leakage\_audit}). Compounds and misspellings are not covered by
-this audit. The \emph{image} can leak the name too: some photos contain printed text, such as a menu caption
+check whether a class word reappears (\texttt{scripts/report\_stats.py}, section \texttt{leakage\_audit}): although
+6.3\% of the test texts contain non-ASCII characters, only 0.07\% (15 of 22,712; 0.12\% of training texts) contain an
+accented class name, almost all of them \emph{cr\`eme br\^ul\'ee}. Accent-related leakage is therefore negligible.
+Compounds and misspellings are not covered by this audit. The \emph{image} can leak the name too: some photos contain printed text, such as a menu caption
 reading ``Chinese Chicken stir-fried rice'' or a restaurant sign ``LOBSTER ME''.
 
 % =================================================================================
@@ -344,9 +346,8 @@ Table~\ref{tab:sig} the paired comparisons.
 
 \begin{table}[!htbp]
 \centering
-\caption{Test results with \texttt{strict} masking ($n=22{,}712$). CI: 95\% interval of accuracy, percentile
-bootstrap for Milestone~2 and normal approximation ($^\dagger$) for Milestone~1; on Milestone~2 runs the two
-methods agree within 0.05 points. Best in bold.}
+\caption{Test results with \texttt{strict} masking ($n=22{,}712$). CI: 95\% percentile bootstrap interval of
+accuracy (1,000 resamples). Best in bold.}
 \label{tab:main}
 \small
 \begin{tabular}{llcccc}
@@ -354,11 +355,11 @@ methods agree within 0.05 points. Best in bold.}
 Encoder & Model & Accuracy & 95\% CI & Top-5 & Macro-F1 \\
 \midrule
 \multirow{5}{*}{\shortstack[l]{Milestone 1\\(fine-tuned)}}
- & TF-IDF + LR (text) & 43.69 & 43.04--44.34$^\dagger$ & 59.96 & 43.82 \\
- & DistilBERT (text) & 41.42 & 40.78--42.06$^\dagger$ & 60.18 & 41.64 \\
- & ResNet-50 (image) & 65.56 & 64.94--66.18$^\dagger$ & 84.44 & 65.33 \\
- & Late fusion & 75.63 & 75.07--76.19$^\dagger$ & 91.12 & 75.52 \\
- & Early fusion & 77.65 & 77.11--78.19$^\dagger$ & 91.35 & 77.58 \\
+ & TF-IDF + LR (text) & 43.69 & 43.07--44.34 & 59.96 & 43.82 \\
+ & DistilBERT (text) & 41.42 & 40.78--42.07 & 60.18 & 41.64 \\
+ & ResNet-50 (image) & 65.56 & 64.95--66.13 & 84.44 & 65.33 \\
+ & Late fusion & 75.63 & 75.08--76.17 & 91.12 & 75.52 \\
+ & Early fusion & 77.65 & 77.10--78.19 & 91.35 & 77.58 \\
 \midrule
 \multirow{7}{*}{\shortstack[l]{Milestone 2\\(frozen CLIP)}}
  & Zero-shot (image) & 71.37 & 70.76--71.97 & 87.33 & 70.66 \\
@@ -382,10 +383,9 @@ Encoder & Model & Accuracy & 95\% CI & Top-5 & Macro-F1 \\
 \begin{table}[!htbp]
 \centering
 \caption{Paired comparisons on the test set. $\Delta = \mathrm{acc}(B)-\mathrm{acc}(A)$ with paired bootstrap
-95\% CI; ``A only'' / ``B only'': images correct for one model only; $p$: McNemar. $p_{\text{Bonf}}$: Bonferroni
-correction over all comparisons in the table (\texttt{scripts/report\_stats.py}). Values below $10^{-300}$ underflow
-double precision and are reported as bounds. \todo{Replace with the 13-pair table after re-running
-summarize\_clip.py and report\_stats.py (adds late vs concat and late vs gated).}}
+95\% CI; ``A only'' / ``B only'': images correct for one model only; $p$: McNemar; $p_{\text{Bonf}}$: Bonferroni
+correction over the 13 comparisons (\texttt{scripts/report\_stats.py}). Values below $10^{-300}$ underflow double
+precision and are reported as bounds.}
 \label{tab:sig}
 \small
 \setlength{\tabcolsep}{4pt}
@@ -394,24 +394,26 @@ summarize\_clip.py and report\_stats.py (adds late vs concat and late vs gated).
 A & B & $\Delta$ & 95\% CI & A only & B only & $p$ & $p_{\text{Bonf}}$ \\
 \midrule
 CLIP image & CLIP text & $-40.84$ & $[-41.63, -40.04]$ & 11,025 & 1,750 & $<10^{-300}$ & $<10^{-300}$ \\
-CLIP image & xattn & $+6.39$ & $[5.96, 6.84]$ & 664 & 2,115 & $1.5\times10^{-166}$ & $<10^{-160}$ \\
+CLIP image & xattn & $+6.39$ & $[5.96, 6.84]$ & 664 & 2,115 & $1.5\times10^{-166}$ & $1.9\times10^{-165}$ \\
 CLIP text & xattn & $+47.23$ & $[46.50, 47.91]$ & 444 & 11,170 & $<10^{-300}$ & $<10^{-300}$ \\
-CLIP late & xattn & $+1.72$ & $[1.34, 2.08]$ & 693 & 1,084 & $2.2\times10^{-20}$ & $2.4\times10^{-19}$ \\
-CLIP concat & xattn & $+0.37$ & $[0.07, 0.68]$ & 612 & 696 & $0.022$ & $0.24$ \\
-CLIP gated & xattn & $+0.51$ & $[0.17, 0.82]$ & 658 & 774 & $0.0024$ & $0.026$ \\
-Zero-shot & CLIP image & $+7.69$ & $[7.22, 8.14]$ & 619 & 2,366 & $4.3\times10^{-224}$ & $<10^{-220}$ \\
+CLIP late & xattn & $+1.72$ & $[1.34, 2.08]$ & 693 & 1,084 & $2.2\times10^{-20}$ & $2.9\times10^{-19}$ \\
+CLIP late & concat & $+1.35$ & $[0.97, 1.71]$ & 717 & 1,024 & $2.2\times10^{-13}$ & $2.9\times10^{-12}$ \\
+CLIP late & gated & $+1.21$ & $[0.88, 1.58]$ & 713 & 988 & $3.1\times10^{-11}$ & $4.0\times10^{-10}$ \\
+CLIP concat & xattn & $+0.37$ & $[0.07, 0.68]$ & 612 & 696 & $0.022$ & $0.28$ \\
+CLIP gated & xattn & $+0.51$ & $[0.17, 0.82]$ & 658 & 774 & $0.0024$ & $0.031$ \\
+Zero-shot & CLIP image & $+7.69$ & $[7.22, 8.14]$ & 619 & 2,366 & $4.3\times10^{-224}$ & $5.5\times10^{-223}$ \\
 ResNet-50 & Early (M1) & $+12.09$ & $[11.57, 12.72]$ & 1,136 & 3,882 & $<10^{-300}$ & $<10^{-300}$ \\
 DistilBERT & Early (M1) & $+36.23$ & $[35.55, 36.89]$ & 422 & 8,651 & $<10^{-300}$ & $<10^{-300}$ \\
-Late (M1) & Early (M1) & $+2.02$ & $[1.60, 2.47]$ & 1,043 & 1,502 & $1.1\times10^{-19}$ & $1.2\times10^{-18}$ \\
-Early (M1) & xattn & $+7.80$ & $[7.27, 8.26]$ & 827 & 2,598 & $6.2\times10^{-201}$ & $6.8\times10^{-200}$ \\
+Late (M1) & Early (M1) & $+2.02$ & $[1.60, 2.47]$ & 1,043 & 1,502 & $1.1\times10^{-19}$ & $1.4\times10^{-18}$ \\
+Early (M1) & xattn & $+7.80$ & $[7.27, 8.26]$ & 827 & 2,598 & $6.2\times10^{-201}$ & $8.1\times10^{-200}$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \paragraph{Which fusion (RQ3)?}
-With the encoder fixed, the three feature-level heads are 1.2--1.7 points above late fusion; cross-attention is
-significantly better than late fusion, and so are concat and gated \todo{concat vs late: +1.35, p = ...; gated vs
-late: +1.21, p = ... (re-run summarize\_clip.py)}. Late fusion only averages two independent decisions, while the
+With the encoder fixed, the three feature-level heads are 1.2--1.7 points above late fusion; all three are
+significantly better than late fusion (cross-attention $+1.72$, concat $+1.35$, gated $+1.21$ points; Bonferroni
+$p\leq4\times10^{-10}$). Late fusion only averages two independent decisions, while the
 feature-level heads can learn which text cues matter for which visual pattern. Cross-attention is numerically the
 best overall, but its lead over concat ($+0.37$) and gated ($+0.51$) is small: after Bonferroni correction the gain
 over gated remains significant while the gain over concat does not. The specific feature-level operator therefore
@@ -484,8 +486,8 @@ Image + text & 0.85 [0.70, 1.00] & 0.55 [0.35, 0.75] & 1.65 [1.40, 1.90] & 0.90 
 \emph{The VLM needs the image.} With masked text only, it identifies 5.5\% of dishes and 79.9\% of its answers match
 no class; manual grades are near zero for all fields. With the image, manual grades are high (dish 0.80--0.85,
 ingredients 1.65/2, cooking method 0.90). \emph{The masked text does not help it.} Adding the text to the image
-changes dish accuracy from 61.0\% to 60.0\% on the same 200 images: the modes differ by two correct answers, so the
-exact McNemar test gives $p\geq0.5$ whatever the number of discordant images. In the manual grades they disagree on
+changes dish accuracy from 61.0\% to 60.0\% on the same 200 images: 8 images are correct only with the image and 6
+only with image and text (paired difference $-1.0$ points, CI $-4.5$ to $+2.5$; McNemar $p=0.79$). In the manual grades they disagree on
 the dish for one image out of 20 ($p=1.0$), a borderline name discussed in Section~\ref{sec:errors}. The VLM
 already recognizes most dishes from the photo, and the masked text adds little it does not see.
 \emph{Classifier versus VLM.} On the same 200 images, the CLIP classifiers are more accurate for the dish (76.0\%
@@ -518,7 +520,7 @@ the Milestone~1 model; the others use frozen CLIP features.}
 Without text, the learned fusion heads lose 6.8--7.8 points but stay within 0.9--1.4 points of the dedicated image
 head (Table~\ref{tab:missing}, Figure~\ref{fig:missing}). Without the image they fall to 33.8--35.0\%,
 \emph{below} the dedicated text head (38.22\%). The heads thus rely mainly on the image: with 10\% modality dropout
-the text pathway is rarely trained alone. Late fusion degrades gracefully by construction (it falls back to the
+the text pathway is rarely trained alone (see the ablation below). Late fusion degrades gracefully by construction (it falls back to the
 unimodal heads) but is the weakest when both inputs are present.
 
 \begin{table}[!htbp]
@@ -547,13 +549,38 @@ Cross-attention & 85.45 & 77.70 & 34.96 \\
 \end{figure}
 
 \paragraph{Modality-dropout ablation.}
-\todo{Table: concat and xattn with modality dropout 0 / 0.1 / 0.3 --- both, text removed, image removed (from
-missing.md after the extra runs), with one sentence on whether more dropout closes the image-removed gap and at
-what cost when both inputs are present.}
+Table~\ref{tab:md} retrains concat and cross-attention with modality dropout 0 and 0.3. Without dropout, the heads
+collapse when an input is missing (cross-attention: 23.95\% without the image, 72.87\% without text). Raising the
+rate steadily improves both missing-modality conditions: at 0.3, cross-attention reaches 38.58\% without the image,
+on par with the dedicated text head (38.22\%), and 78.34\% without text, close to the image head (79.06\%). With
+both inputs, each head's accuracy changes by at most 0.21 points across the three rates, well inside the confidence
+intervals. Modality dropout
+thus buys robustness at no visible cost, and 0.3 would be a better default than our 0.1.
+
+\begin{table}[!htbp]
+\centering
+\caption{Modality-dropout ablation (\texttt{strict}, accuracy in \%). References: image head 79.06, text head 38.22.}
+\label{tab:md}
+\small
+\begin{tabular}{lcccc}
+\toprule
+Head & Dropout & Both & Text removed & Image removed \\
+\midrule
+\multirow{3}{*}{Concat} & 0 & 84.87 & 75.36 & 24.78 \\
+ & 0.1 & 85.08 & 77.78 & 33.82 \\
+ & 0.3 & 85.08 & 78.45 & 36.86 \\
+\midrule
+\multirow{3}{*}{Cross-attention} & 0 & 85.35 & 72.87 & 23.95 \\
+ & 0.1 & 85.45 & 77.70 & 34.96 \\
+ & 0.3 & 85.44 & 78.34 & 38.58 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \paragraph{Practical implication.}
 For a deployed system the image should be treated as the primary input. Fusion is worth adding when text is
-available, but the system should not depend on it, and it can over-trust unusual text (Section~\ref{sec:errors}).
+available, but it should be trained with enough modality dropout (0.3 here) so that it degrades gracefully, and it
+can still over-trust unusual text (Section~\ref{sec:errors}).
 
 % =================================================================================
 \section{Error and Qualitative Analysis}
@@ -586,7 +613,7 @@ the only image vs image+text disagreement \\
 VLM, text & 79.9\% unmapped answers; ``sushi'' for a ramen label & Masked text alone does not identify the dish \\
 VLM, language & ``honey'' written in Chinese characters & Drift from the English-only instruction \\
 Demo & Vietnamese caption pushes fusion to \emph{pho} (33\%) though the image head says \emph{pizza} (80\%) &
-Unusual text; possibly an accented dish name that escapes the mask \\
+Out-of-domain text; possibly an accented dish name that escapes the mask \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -613,8 +640,9 @@ the image head's errors but introduces 664 new ones: when the masked text points
 can follow it. The demo shows an extreme case. A Vietnamese caption pushed the fusion head toward \emph{pho} while
 the image head correctly predicted \emph{pizza}. A possible cause is the masking gap of Section~\ref{sec:data}:
 Vietnamese writes the dish name with diacritics, which \texttt{strict} does not mask, so the head may have received
-an almost explicit dish name that it rarely saw in training. We did not record the masked caption, so this remains
-a hypothesis.
+an almost explicit dish name. Such text is essentially absent from the corpus (the audit finds no accented
+\emph{pho} at all), so the head never learned how much to trust it. We did not record the masked caption, so this
+remains a hypothesis.
 
 % =================================================================================
 \section{Conclusion and Limitations}
@@ -624,17 +652,19 @@ stronger modality. With dish names masked, the image is the primary signal (79.0
 (43.69\% at best), yet combining them is significantly better than either: cross-attention fusion on frozen CLIP
 features reaches 85.45\% accuracy and 95.49\% top-5, $+6.39$ points over the image head. Feature-level fusion is
 1.2--1.7 points above late fusion, the specific operator matters little, and the pretrained encoder matters most.
-Fusion models lean on the image and fail when it is missing. Beyond the class label, a 4B-parameter VLM extracts
+Fusion models lean on the image; with 10\% modality dropout they fall below the text-only head when the image is
+missing, and raising the rate to 0.3 closes this gap at no cost. Beyond the class label, a 4B-parameter VLM extracts
 usable ingredients and cooking methods from the photo, but it needs the image, and the masked text adds nothing
 measurable.
 
 \paragraph{Limitations.}
 All runs use one training seed, so intervals reflect only test-set sampling. \texttt{strict} masking over-masks
-some descriptive words, while accented, compound and misspelled dish names and text printed in images still leak.
+some descriptive words, while compound and misspelled dish names and text printed in images can still leak (accented
+names affect only 0.07\% of test texts).
 Text budgets differ (CLIP 77 tokens, DistilBERT 256, TF-IDF up to 5,000 characters, the VLM 1,000 characters).
 Labels are noisy, we did not check for duplicate images across splits, and UPMC images may be part of CLIP's or
 Qwen3-VL's pretraining data. The VLM evaluation is small (200 images, 20 graded per mode, one grading pass) and its
-label-based accuracy depends on string matching. Future work: more seeds, a stronger masking (accent folding),
+label-based accuracy depends on string matching. Future work: more seeds, accent-folding and fuzzy matching in the mask,
 partial fine-tuning of CLIP, letting the VLM choose among the classifier's top-5 candidates, and larger VLMs.
 
 % =================================================================================
