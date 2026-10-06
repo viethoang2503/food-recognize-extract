@@ -10,7 +10,7 @@ all class names are masked (`strict`).
 - **Report:** [`docs/report/main.tex`](docs/report/main.tex) (LaTeX source; figures in `docs/report/figures/`)
 - **Data:** [`DATA.md`](DATA.md): source, version, split, preprocessing
 - **Result tables:** [`docs/results/`](docs/results/)
-- **Demo:** Gradio app, see [Demo](#demo) (link: _TODO_)
+- **Demo:** Gradio app, see [Demo](#demo); recorded demo video: <https://drive.google.com/file/d/1S3OLhJCYuJWdLxxNX41pHEKuCQX2-KQO/view>
 
 ## Main results
 
@@ -76,11 +76,17 @@ The first cells mount Google Drive, clone this repository and install `requireme
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements-dev.txt      # torch, torchvision, transformers, timm, scikit-learn, gradio, pytest
+pip install -r requirements.txt          # full environment (GPU machine): all experiments, VLM, demo, tests
+# or: pip install -r requirements-dev.txt   # lighter CPU environment for the tests only
 ```
 
-`requirements-colab.txt` only pins the packages Colab does not preinstall (timm, transformers, bitsandbytes,
-gradio). Training the models locally needs a CUDA GPU; the tests run on CPU.
+| File | Use |
+|---|---|
+| `requirements.txt` | everything needed to reproduce the experiments on a CUDA GPU (adds accelerate, bitsandbytes, kaggle) |
+| `requirements-dev.txt` | CPU environment for the test suite |
+| `requirements-colab.txt` | only the packages Colab does not preinstall (timm, transformers, bitsandbytes, gradio); used by the notebooks |
+
+Training the models needs a CUDA GPU; the tests run on CPU.
 
 ## Data
 
@@ -153,7 +159,8 @@ python scripts/demo.py --share --set $P
 
 Without a GPU, `--no_vlm` disables the VLM option. The public `*.gradio.live` link expires when the session ends.
 
-**Permanent demo on Hugging Face Spaces** (CPU, image / text / fusion only; the VLM needs a GPU):
+**Permanent demo on Hugging Face Spaces** (CPU, image / text / fusion only; the VLM needs a GPU). Hugging Face now
+requires a PRO account to host Gradio Spaces, so this step is optional and was not used for the submission:
 
 ```bash
 export HF_TOKEN=<write token>

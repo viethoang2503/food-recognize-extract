@@ -1,0 +1,19 @@
+# Full environment to reproduce every experiment on a CUDA GPU machine (Python >= 3.10).
+# On Google Colab most of these are preinstalled; the notebooks only install requirements-colab.txt.
+# For the CPU test suite only, requirements-dev.txt is enough.
+torch
+torchvision
+timm==1.0.30
+transformers==5.17.0
+accelerate                                   # device_map="auto" for the VLM
+bitsandbytes==0.50.2; platform_system == "Linux"   # 4-bit VLM loading on older GPUs (T4)
+scikit-learn
+numpy
+pandas
+pyyaml
+pillow
+matplotlib
+gradio==6.28.0
+kaggle                                       # dataset download
+huggingface_hub                              # optional: deploy the demo to a Space
+pytest
